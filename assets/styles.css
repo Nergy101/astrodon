@@ -734,34 +734,30 @@ pre code {
   color: inherit;
 }
 
-/* Monaco Editor Container */
-.monaco-editor-container {
+/* Code Block Container */
+.code-block-container {
   border-radius: var(--radius-lg);
   overflow: hidden;
   margin: var(--spacing-lg) 0;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border-color);
   position: relative;
-  height: 300px;
-  min-height: 200px;
-  max-height: 600px;
-  display: flex;
-  flex-direction: column;
 }
 
-.monaco-editor-container .monaco-editor-wrapper {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-}
-
-.monaco-editor-container .monaco-editor {
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
+.code-block-container pre {
+  margin: 0;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: var(--bg-tertiary);
+}
+
+.code-block-container code {
+  background: none;
+  padding: 0;
+  border: none;
+  color: inherit;
+  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 /* Code block header */
@@ -808,28 +804,6 @@ pre code {
   background: #10b981;
   color: white;
   border-color: #10b981;
-}
-
-/* Monaco Editor Theme Customization */
-.monaco-editor .margin {
-  background-color: var(--bg-tertiary) !important;
-}
-
-.monaco-editor .monaco-editor-background {
-  background-color: var(--bg-primary) !important;
-}
-
-/* Fallback for when Monaco isn't loaded */
-pre.monaco-fallback {
-  background: var(--bg-tertiary);
-  padding: var(--spacing-lg);
-  border-radius: var(--radius-lg);
-  overflow-x: auto;
-  margin: var(--spacing-lg) 0;
-  border: 1px solid var(--border-color);
-  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
-  font-size: 0.9rem;
-  line-height: 1.5;
 }
 
 /* ===== LISTS ===== */

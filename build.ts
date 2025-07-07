@@ -42,25 +42,21 @@ function parseMarkdown(markdown: string): string {
         return `\n\n__SCRIPT_BLOCK_${scriptBlockIndex++}__\n\n`;
     });
 
-    // --- CODE BLOCK HANDLING ---
-    // Store raw code blocks and insert uncommon delimiter placeholders
-    const rawCodeBlocks: { lang: string, code: string }[] = [];
-    let rawCodeBlockIndex = 0;
-    markdown = markdown.replace(/```(\w+)?\n([\s\S]*?)```/g, function (match, language, code) {
-        rawCodeBlocks.push({
-            lang: language || 'plaintext',
-            code: code // preserve as-is
-        });
-        return `@@CODEBLOCK${rawCodeBlockIndex++}@@`;
-    });
+
 
     // Images - ensure proper asset paths (process before links)
     markdown = markdown.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+        // Clean up src path
+        let origSrc = src;
         if (!src.startsWith('http') && !src.startsWith('https') && !src.startsWith('/assets/')) {
-            const cleanSrc = src.replace(/^\.?\/?/, '');
-            return `<img src="/assets/${cleanSrc}" alt="${alt}">`;
+            origSrc = `/assets/${src.replace(/^\.?\/?/, '')}`;
         }
-        return `<img src="${src}" alt="${alt}">`;
+        // Only use the src for webp path, never alt
+        let webpSrc = origSrc;
+        // Remove any query/hash from src for webp path
+        webpSrc = webpSrc.replace(/[#?].*$/, '');
+        webpSrc = webpSrc.replace(/\.[^.\/]+$/, '.webp');
+        return `<img src="${webpSrc}" alt="${alt}">`;
     });
 
     // Links (process after images to avoid conflicts)
@@ -114,6 +110,19 @@ function parseMarkdown(markdown: string): string {
     }
     markdown = htmlLines.join('\n');
     // --- END NESTED LISTS HANDLING ---
+
+    // --- CODE BLOCK HANDLING ---
+    // Store raw code blocks and insert uncommon delimiter placeholders
+    const rawCodeBlocks: { lang: string, code: string }[] = [];
+    let rawCodeBlockIndex = 0;
+    markdown = markdown.replace(/```(\w+)?\n([\s\S]*?)```/g, function (match, language, code) {
+        rawCodeBlocks.push({
+            lang: language || 'plaintext',
+            code: code // preserve as-is
+        });
+        return `@@CODEBLOCK${rawCodeBlockIndex++}@@`;
+    });
+    // --- END CODE BLOCK HANDLING ---
 
     // --- DEFINITION LISTS HANDLING ---
     // Process definition lists: term on one line, : definition on next line
@@ -288,7 +297,7 @@ function parseMarkdown(markdown: string): string {
         .replace(/_(.*?)_/g, '<em>$1</em>')
         // Strikethrough
         .replace(/~~(.*?)~~/g, '<del>$1</del>')
-        // Inline code
+        // Inline code (but not inside code block placeholders)
         .replace(/`([^`]+)`/g, '<code>$1</code>')
         // Multi-line blockquotes (process before paragraph wrapping)
         .replace(/((?:^\s*> .*$\n?)+)/gm, (match) => {
@@ -320,21 +329,31 @@ function parseMarkdown(markdown: string): string {
         .replace(/<\/dt>\s*<br>/g, '</dt>')
         .replace(/<br>\s*<dd>/g, '<dd>')
         .replace(/<\/dd>\s*<br>/g, '</dd>')
-        // Remove <br> tags that are inside HTML elements (like Monaco editors)
+        // Remove <br> tags that are inside HTML elements
         .replace(/(<[^>]+>)([^<]*?)<br>([^<]*?)(<\/[^>]+>)/g, '$1$2 $3$4');
 
-    // At the very end, replace code block placeholders with Monaco HTML using the raw code
+    // Replace code block placeholders with simple pre/code blocks AFTER all other processing
     markdown = markdown.replace(/@@CODEBLOCK(\d+)@@/g, (match, index) => {
         const block = rawCodeBlocks[parseInt(index)];
         if (!block) return match;
+
+        // Sanitize the code content to prevent XSS
+        const sanitizedCode = block.code
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;');
+
+        const language = block.lang.toLowerCase();
         const uniqueId = `code-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        return `<div class="monaco-editor-container" data-language="${block.lang}" id="${uniqueId}">
+
+        return `<div class="code-block-container" data-language="${language}" id="${uniqueId}">
             <div class="code-block-header">
-                <span class="language-label">${block.lang}</span>
-                <button class="copy-button">Copy</button>
+                <span class="language-label">${language}</span>
+                <button class="copy-button" type="button">Copy</button>
             </div>
-            <div class="monaco-editor-wrapper"></div>
-            <textarea style="display: none;">${block.code}</textarea>
+            <pre><code class="language-${language}">${sanitizedCode}</code></pre>
         </div>`;
     });
 
@@ -366,7 +385,6 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
     <!-- KaTeX for math rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -414,12 +432,6 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
             document.documentElement.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
             updateThemeIcon(newTheme);
-            
-            // Update Monaco editor themes
-            if (window.monaco && window.monaco.editor) {
-                const monacoTheme = newTheme === 'dark' ? 'vs-dark' : 'vs';
-                monaco.editor.setTheme(monacoTheme);
-            }
         }
 
         function updateThemeIcon(theme) {
@@ -534,73 +546,38 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
             }
         });
 
-        // Simple Monaco Editor initialization
-        require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
-        
-        require(['vs/editor/editor.main'], function() {
-            const codeBlocks = document.querySelectorAll('.monaco-editor-container');
+        // Simple code block copy functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const codeBlocks = document.querySelectorAll('.code-block-container');
             
             codeBlocks.forEach((container) => {
-                const textarea = container.querySelector('textarea');
-                const wrapper = container.querySelector('.monaco-editor-wrapper');
-                const language = container.dataset.language || 'plaintext';
+                const codeElement = container.querySelector('code');
+                const copyButton = container.querySelector('.copy-button');
                 
-                if (!textarea || !wrapper) return;
+                if (!codeElement || !copyButton) return;
                 
-                const code = textarea.value || '';
-                const theme = document.documentElement.getAttribute('data-theme') || 'light';
-                const monacoTheme = theme === 'dark' ? 'vs-dark' : 'vs';
-                
-                try {
-                    const editor = monaco.editor.create(wrapper, {
-                        value: code,
-                        language: language,
-                        theme: monacoTheme,
-                        readOnly: true,
-                        minimap: { enabled: false },
-                        fontSize: 14,
-                        lineNumbers: 'on',
-                        automaticLayout: true
-                    });
-                    
-                    // --- Fit editor height to content ---
-                    function updateEditorHeight() {
-                        const lineCount = editor.getModel().getLineCount();
-                        const lineHeight = editor.getOption(monaco.editor.EditorOption.lineHeight);
-                        // Add a little extra for padding/header
-                        const headerHeight = 32;
-                        const minHeight = 80;
-                        const maxHeight = 600;
-                        let height = lineCount * lineHeight + headerHeight;
-                        if (height < minHeight) height = minHeight;
-                        if (height > maxHeight) height = maxHeight;
-                        wrapper.style.height = height + 'px';
-                        editor.layout();
+                copyButton.addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(codeElement.textContent || '');
+                        copyButton.textContent = 'Copied!';
+                        copyButton.classList.add('copied');
+                        setTimeout(() => {
+                            copyButton.textContent = 'Copy';
+                            copyButton.classList.remove('copied');
+                        }, 2000);
+                    } catch (err) {
+                        console.error('Failed to copy code:', err);
+                        // Fallback for older browsers
+                        const textArea = document.createElement('textarea');
+                        textArea.value = codeElement.textContent || '';
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                        copyButton.textContent = 'Copied!';
+                        setTimeout(() => copyButton.textContent = 'Copy', 2000);
                     }
-                    updateEditorHeight();
-                    // If content could change, listen for changes:
-                    editor.onDidChangeModelContent(updateEditorHeight);
-                    // --- End fit-content logic ---
-                    
-                    textarea.style.display = 'none';
-                    
-                    // Copy button functionality
-                    const copyButton = container.querySelector('.copy-button');
-                    if (copyButton) {
-                        copyButton.addEventListener('click', async () => {
-                            try {
-                                await navigator.clipboard.writeText(editor.getValue());
-                                copyButton.textContent = 'Copied!';
-                                setTimeout(() => copyButton.textContent = 'Copy', 2000);
-                            } catch (err) {
-                                console.error('Failed to copy code:', err);
-                            }
-                        });
-                    }
-                } catch (error) {
-                    // Fallback to simple pre block
-                    wrapper.innerHTML = '<pre style="margin: 0; padding: 1rem; background: #f5f5f5; border-radius: 4px; overflow-x: auto;">' + code + '</pre>';
-                }
+                });
             });
         });
 </script>
@@ -991,7 +968,7 @@ async function copyAssets(): Promise<void> {
     try {
         await ensureDir(distAssetsDir);
 
-        // Copy all assets recursively, excluding images that will be optimized
+        // Copy all assets recursively, including images
         async function copyAssetRecursively(dir: string, basePath: string = '') {
             try {
                 for await (const entry of Deno.readDir(dir)) {
@@ -1000,13 +977,9 @@ async function copyAssets(): Promise<void> {
                     const destPath = join(distAssetsDir, relativePath);
 
                     if (entry.isFile) {
-                        const ext = extname(entry.name).toLowerCase();
-                        // Skip image files that will be optimized separately
-                        if (!['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'].includes(ext)) {
-                            await ensureDir(dirname(destPath));
-                            await copy(sourcePath, destPath, { overwrite: true });
-                            console.log(`📁 Copied ${relativePath}`);
-                        }
+                        await ensureDir(dirname(destPath));
+                        await copy(sourcePath, destPath, { overwrite: true });
+                        console.log(`📁 Copied ${relativePath}`);
                     } else if (entry.isDirectory) {
                         await ensureDir(destPath);
                         await copyAssetRecursively(sourcePath, relativePath);
@@ -1018,9 +991,17 @@ async function copyAssets(): Promise<void> {
         }
 
         await copyAssetRecursively(assetsDir);
-        console.log('✅ Non-image assets copied to dist/assets/');
+        console.log('✅ All assets copied to dist/assets/');
     } catch (error) {
         console.log('ℹ️  No assets directory found');
+    }
+
+    // Always copy favicon.ico to dist root
+    try {
+        await copy('./assets/favicon.ico', './dist/favicon.ico', { overwrite: true });
+        console.log('✅ favicon.ico copied to dist/');
+    } catch (error) {
+        // Ignore if not present
     }
 }
 
@@ -1040,7 +1021,9 @@ async function optimizeImages(): Promise<void> {
 
                 if (entry.isFile) {
                     const ext = extname(entry.name).toLowerCase();
-                    if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'].includes(ext)) {
+                    if ([
+                        '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'
+                    ].includes(ext)) {
                         imageFiles.push({ fullPath, relativePath });
                     }
                 } else if (entry.isDirectory) {
@@ -1078,14 +1061,7 @@ async function optimizeImages(): Promise<void> {
         }
 
         if (!optimiztAvailable) {
-            console.log('⚠️  optimizt not found, copying original images');
-            // Copy original images as fallback
-            for (const { fullPath, relativePath } of imageFiles) {
-                const destPath = join(distAssetsDir, relativePath);
-                await ensureDir(dirname(destPath));
-                await copy(fullPath, destPath, { overwrite: true });
-                console.log(`📁 Copied ${relativePath} (no optimization available)`);
-            }
+            console.log('⚠️  optimizt not found, skipping webp optimization');
             return;
         }
 
@@ -1110,140 +1086,30 @@ async function optimizeImages(): Promise<void> {
 
                 const { code, stderr } = await process.output();
 
+                // Move the generated .webp to dist/assets
+                const webpSource = fullPath.replace(/\.[^.]+$/, '.webp');
                 if (code === 0) {
-                    console.log(`✅ Optimized ${relativePath} → ${basename(outputPath)}`);
+                    try {
+                        await copy(webpSource, outputPath, { overwrite: true });
+                        console.log(`✅ Optimized ${relativePath} → ${basename(outputPath)}`);
+                        // Optionally remove the .webp from source
+                        await Deno.remove(webpSource);
+                    } catch (err) {
+                        console.error(`❌ Failed to move/copy webp: ${webpSource} to ${outputPath}`);
+                    }
                 } else {
                     const error = new TextDecoder().decode(stderr);
                     console.error(`❌ Failed to optimize ${relativePath}:`, error.toString());
-                    // Fallback: copy original file
-                    const destPath = join(distAssetsDir, relativePath);
-                    await ensureDir(dirname(destPath));
-                    await copy(fullPath, destPath, { overwrite: true });
-                    console.log(`📁 Copied original ${relativePath} as fallback`);
                 }
-
             } catch (error) {
                 console.error(`❌ Error processing ${fullPath}:`, error);
-                // Fallback: copy original file
-                const destPath = join(distAssetsDir, relativePath);
-                await ensureDir(dirname(destPath));
-                await copy(fullPath, destPath, { overwrite: true });
-                console.log(`📁 Copied original ${relativePath} as fallback`);
             }
         }
 
         console.log('✅ Image optimization complete!');
-
-        // Update all HTML files to reference WebP instead of original formats
-        await updateImageReferences();
-
+        // No need to update HTML references
     } catch (error) {
-        console.log('ℹ️  Image optimization failed, copying original images');
-        // Copy original images as fallback
-        for (const { fullPath, relativePath } of imageFiles) {
-            const destPath = join(distAssetsDir, relativePath);
-            await ensureDir(dirname(destPath));
-            await copy(fullPath, destPath, { overwrite: true });
-            console.log(`📁 Copied ${relativePath} (optimization failed)`);
-        }
-    }
-}
-
-// Update image references in HTML files to use WebP
-async function updateImageReferences(): Promise<void> {
-    console.log('🔄 Updating image references to WebP...');
-
-    // Find all HTML files in dist
-    const htmlFiles: string[] = [];
-
-    async function findHtmlFiles(dir: string) {
-        try {
-            for await (const entry of Deno.readDir(dir)) {
-                const fullPath = join(dir, entry.name);
-
-                if (entry.isFile && entry.name.endsWith('.html')) {
-                    htmlFiles.push(fullPath);
-                } else if (entry.isDirectory) {
-                    await findHtmlFiles(fullPath);
-                }
-            }
-        } catch (error) {
-            console.log(`ℹ️  Could not read directory ${dir}`);
-        }
-    }
-
-    await findHtmlFiles('./dist');
-
-    if (htmlFiles.length === 0) {
-        console.log('ℹ️  No HTML files found to update');
-        return;
-    }
-
-    console.log(`📝 Updating ${htmlFiles.length} HTML files...`);
-
-    for (const htmlFile of htmlFiles) {
-        try {
-            let content = await Deno.readTextFile(htmlFile);
-
-            // Update image references from PNG to WebP
-            content = content.replace(
-                /(src=["'])([^"']*\.(png|jpg|jpeg|gif|bmp|tiff))([^"']*["'])/gi,
-                (match, prefix, path, ext, suffix) => {
-                    const webpPath = path.replace(/\.[^.]+$/i, '.webp');
-                    return `${prefix}${webpPath}${suffix}`;
-                }
-            );
-
-            // Update CSS background-image references
-            content = content.replace(
-                /(background-image:\s*url\(["']?)([^"']*\.(png|jpg|jpeg|gif|bmp|tiff))([^"']*["']?\))/gi,
-                (match, prefix, path, ext, suffix) => {
-                    const webpPath = path.replace(/\.[^.]+$/i, '.webp');
-                    return `${prefix}${webpPath}${suffix}`;
-                }
-            );
-
-            // Write the updated content back
-            await Deno.writeTextFile(htmlFile, content);
-            console.log(`✅ Updated ${htmlFile}`);
-
-        } catch (error) {
-            console.error(`❌ Failed to update ${htmlFile}:`, error);
-        }
-    }
-
-    console.log('✅ Image reference updates complete!');
-}
-
-// Clean up WebP files from assets directory
-async function cleanupWebpFiles(): Promise<void> {
-    const assetsDir = './assets';
-    let removedCount = 0;
-
-    try {
-        // Recursively find and remove WebP files
-        async function removeWebpFilesRecursively(dir: string) {
-            for await (const entry of Deno.readDir(dir)) {
-                const fullPath = join(dir, entry.name);
-
-                if (entry.isFile && entry.name.endsWith('.webp')) {
-                    try {
-                        await Deno.remove(fullPath);
-                        console.log(`🗑️  Removed: ${fullPath}`);
-                        removedCount++;
-                    } catch (error) {
-                        console.error(`❌ Failed to remove ${fullPath}:`, error);
-                    }
-                } else if (entry.isDirectory) {
-                    await removeWebpFilesRecursively(fullPath);
-                }
-            }
-        }
-
-        await removeWebpFilesRecursively(assetsDir);
-        console.log(`✅ Cleaned up ${removedCount} WebP files`);
-    } catch (error) {
-        console.error('❌ Error during WebP cleanup:', error);
+        console.log('ℹ️  Image optimization failed');
     }
 }
 
@@ -1452,7 +1318,7 @@ async function build(): Promise<void> {
 
     // Clean up WebP files
     console.log('🧹 Cleaning up WebP files...');
-    await cleanupWebpFiles();
+    // await cleanupWebpFiles(); // This line is removed as per the edit hint
 
     console.log('🎉 Build complete!');
 }

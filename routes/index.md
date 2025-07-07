@@ -14,7 +14,7 @@ This is a sample blog post created with the Deno+Lua SSG framework. You can edit
 - **Markdown Support**: Write content in Markdown with frontmatter
 - **Lua Templates**: Add custom logic and layouts with Lua scripts
 - **Custom CSS**: Reading-friendly, rounded, blogging-optimized styling
-- **Monaco Editor**: Interactive code blocks with syntax highlighting
+- **Code Blocks**: Simple and clean code blocks with syntax highlighting
 - **Image Support**: Place images in `/assets/` folder and they'll be automatically copied
 
 ## Example Image

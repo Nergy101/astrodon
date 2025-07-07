@@ -25,12 +25,12 @@ function render(content, context)
   
   metadata = metadata .. '</div>'
 
-  -- Patch: Do not process blockquotes inside Monaco code blocks
+  -- Patch: Do not process blockquotes inside code blocks
   local blocks = {}
   local i = 1
-  content = content:gsub('(<div class="monaco%-editor%-container".-</div>)', function(block)
+  content = content:gsub('(<div class="code%-block%-container".-</div>)', function(block)
     blocks[i] = block
-    local marker = "__MONACO_BLOCK_" .. i .. "__"
+    local marker = "__CODE_BLOCK_" .. i .. "__"
     i = i + 1
     return marker
   end)
@@ -61,8 +61,8 @@ function render(content, context)
     end
   )
 
-  -- Restore Monaco code blocks
-  processedContent = processedContent:gsub("__MONACO_BLOCK_(%d+)__", function(idx)
+  -- Restore code blocks
+  processedContent = processedContent:gsub("__CODE_BLOCK_(%d+)__", function(idx)
     return blocks[tonumber(idx)] or ''
   end)
 

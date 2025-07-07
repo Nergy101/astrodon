@@ -14,7 +14,7 @@ A high-performance static site generator built with Deno and Lua templating, fea
 - **🎨 Lua Templating**: Custom rendering logic with Lua scripts
 - **🖼️ Image Optimization**: Automatic WebP conversion with `optimizt`
 - **⚡ Performance Monitoring**: Built-in metrics and benchmarking tools
-- **🎨 PicoCSS**: Beautiful, classless styling that looks great out of the box
+- **🎨 Clean Styling**: Beautiful, reading-optimized styling with dark/light themes
 - **🌐 Development Server**: Live preview with hot reloading
 - **📊 Real-time Metrics**: Build performance tracking and optimization insights
 

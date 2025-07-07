@@ -29,7 +29,7 @@ This blog is built with a custom **Deno+Lua Static Site Generator (SSG)** that c
 
 - **Dark/Light Theme**: Toggle between themes with persistent preference
 - **Responsive Design**: Mobile-friendly navigation and layout
-- **Interactive Code Blocks**: Monaco Editor integration with syntax highlighting
+- **Code Blocks**: Simple and clean code blocks with syntax highlighting
 - **Reading-Optimized**: Typography and spacing designed for readability
 
 ### 🔧 Technical Features
@@ -84,7 +84,7 @@ This is my first blog post written in Markdown.
 - **Lua Templates**: Add custom logic
 - **Dark Theme**: Beautiful styling
 
-![Sample Image](/assets/sample.jpg)
+![Sample Image](/assets/crow_fox.png)
 ```
 
 ### Frontmatter
