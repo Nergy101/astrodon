@@ -1,0 +1,53 @@
+name: Build and Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Cache Deno dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/deno
+            deno.lock
+          key: ${{ runner.os }}-deno-${{ hashFiles('**/deno.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-deno-
+
+      - name: Install dependencies
+        run: deno cache build.ts
+
+      - name: Build project
+        run: deno task build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist-files
+          path: dist/
+          retention-days: 7
+
+      - name: Build size report
+        run: |
+          echo "📊 Build size report:"
+          du -sh dist/ || echo "dist/ directory not found"
+          find dist/ -type f -name "*.html" | wc -l | xargs echo "HTML files:"
+          find dist/ -type f -name "*.css" | wc -l | xargs echo "CSS files:"
+          find dist/ -type f -name "*.js" | wc -l | xargs echo "JS files:"
+          find dist/ -type f -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.webp" | wc -l | xargs echo "Image files:"
