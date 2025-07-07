@@ -1428,6 +1428,22 @@ async function build(): Promise<void> {
     console.log('📁 Copying assets...');
     await copyAssets();
 
+    // Copy serve.ts to dist for independent execution
+    console.log('🚀 Copying and patching serve.ts to dist...');
+    try {
+        let serveSrc = await Deno.readTextFile('./serve.ts');
+        // Patch fsRoot: "./dist" to fsRoot: "."
+        serveSrc = serveSrc.replace('fsRoot: "./dist"', 'fsRoot: "."');
+        // Patch specific Deno.readTextFile calls - be more precise
+        serveSrc = serveSrc.replace(/Deno\.readTextFile\("\.\/dist" \+ htmlPath\)/g, 'Deno.readTextFile(htmlPath.slice(1))');
+        serveSrc = serveSrc.replace(/const indexPath = "\.\/dist\/index\.html";/g, 'const indexPath = "index.html";');
+        serveSrc = serveSrc.replace(/const indexContent = await Deno\.readTextFile\(indexPath\);/g, 'const indexContent = await Deno.readTextFile(indexPath);');
+        await Deno.writeTextFile('./dist/serve.ts', serveSrc);
+        console.log('✅ serve.ts copied and patched to dist/');
+    } catch (error) {
+        console.error('❌ Failed to copy/patch serve.ts:', error);
+    }
+
     console.log('🖼️  Optimizing images...');
     await optimizeImages();
 
