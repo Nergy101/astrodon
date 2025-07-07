@@ -7,13 +7,78 @@ import { LuaFactory } from "npm:wasmoon@1.16.0";
 
 const port = 8000;
 
+// Performance optimizations: Response cache
+const responseCache = new Map<string, { response: Response; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Compression helper
+function compressResponse(content: string, contentType: string, enableCache: boolean = false): Response {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(content);
+
+    const headers: Record<string, string> = {
+        "content-type": contentType,
+    };
+
+    // Only add cache headers for API endpoints
+    if (enableCache) {
+        headers["cache-control"] = "public, max-age=300"; // 5 minutes
+        headers["vary"] = "Accept-Encoding";
+    } else {
+        // Disable caching for normal routes
+        headers["cache-control"] = "no-cache, no-store, must-revalidate";
+        headers["pragma"] = "no-cache";
+        headers["expires"] = "0";
+    }
+
+    return new Response(data, { headers });
+}
+
+// Cache management
+function getCachedResponse(path: string): Response | null {
+    const cached = responseCache.get(path);
+    if (!cached) return null;
+
+    if (Date.now() - cached.timestamp > CACHE_TTL) {
+        responseCache.delete(path);
+        return null;
+    }
+
+    return cached.response;
+}
+
+function setCachedResponse(path: string, response: Response) {
+    responseCache.set(path, { response, timestamp: Date.now() });
+}
+
+// Clean up old cache entries periodically
+setInterval(() => {
+    const now = Date.now();
+    for (const [path, cached] of responseCache.entries()) {
+        if (now - cached.timestamp > CACHE_TTL) {
+            responseCache.delete(path);
+        }
+    }
+}, CACHE_TTL);
+
 console.log(`🚀 Starting development server at http://localhost:${port}`);
 console.log(`📁 Serving files from ./dist/`);
 console.log(`🔄 Auto fallback to index.html enabled`);
+console.log(`⚡ API caching enabled (5min TTL), normal routes disabled`);
 
 await serve(async (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+
+    // Check cache first (only for API endpoints)
+    if (path.startsWith('/lua-scripts/')) {
+        const cachedResponse = getCachedResponse(path);
+        if (cachedResponse) {
+            // Optionally log cache hit for API endpoints only
+            // console.log(`⚡ Cache hit for ${path}`);
+            return cachedResponse;
+        }
+    }
 
     // API endpoint for current UTC time from Lua
     if (path === "/lua-scripts/time") {
@@ -26,21 +91,34 @@ await serve(async (req) => {
             const { code, stdout, stderr } = await process.output();
             if (code !== 0) {
                 const error = new TextDecoder().decode(stderr);
-                return new Response(JSON.stringify({ error }), {
+                const response = new Response(JSON.stringify({ error }), {
                     status: 500,
-                    headers: { "content-type": "application/json" },
+                    headers: {
+                        "content-type": "application/json",
+                        "cache-control": "no-cache, no-store, must-revalidate",
+                    },
                 });
+                return response;
             }
             const time = new TextDecoder().decode(stdout).trim();
-            return new Response(JSON.stringify({ time }), {
+            const response = new Response(JSON.stringify({ time }), {
                 status: 200,
-                headers: { "content-type": "application/json" },
+                headers: {
+                    "content-type": "application/json",
+                    "cache-control": "public, max-age=300", // 5 minutes for API
+                },
             });
+            setCachedResponse(path, response);
+            return response;
         } catch (err) {
-            return new Response(JSON.stringify({ error: String(err) }), {
+            const response = new Response(JSON.stringify({ error: String(err) }), {
                 status: 500,
-                headers: { "content-type": "application/json" },
+                headers: {
+                    "content-type": "application/json",
+                    "cache-control": "no-cache, no-store, must-revalidate",
+                },
             });
+            return response;
         }
     }
 
@@ -53,10 +131,14 @@ await serve(async (req) => {
             // SECURITY: Only allow specific modules
             const allowedModules = ["render-time"];
             if (!allowedModules.includes(module)) {
-                return new Response(JSON.stringify({ error: `Module '${module}' not allowed` }), {
+                const response = new Response(JSON.stringify({ error: `Module '${module}' not allowed` }), {
                     status: 403,
-                    headers: { "content-type": "application/json" },
+                    headers: {
+                        "content-type": "application/json",
+                        "cache-control": "no-cache, no-store, must-revalidate",
+                    },
                 });
+                return response;
             }
 
             // SECURITY: Validate and sanitize context
@@ -121,33 +203,50 @@ end
                 const factory = new LuaFactory();
                 const lua = await factory.createEngine();
                 result = await lua.doString(luaScript);
-                await lua.close();
+                // Note: LuaEngine doesn't have a close method in this version
+                // The engine will be garbage collected automatically
             } catch (err) {
                 console.error("Lua execution error:", err);
-                return new Response(JSON.stringify({ error: "Execution failed" }), {
+                const response = new Response(JSON.stringify({ error: "Execution failed" }), {
                     status: 500,
-                    headers: { "content-type": "application/json" },
+                    headers: {
+                        "content-type": "application/json",
+                        "cache-control": "no-cache, no-store, must-revalidate",
+                    },
                 });
+                return response;
             }
 
             // SECURITY: Limit output size
             if (typeof result === "string" && result.length > 1000) {
-                return new Response(JSON.stringify({ error: "Output too large" }), {
+                const response = new Response(JSON.stringify({ error: "Output too large" }), {
                     status: 413,
-                    headers: { "content-type": "application/json" },
+                    headers: {
+                        "content-type": "application/json",
+                        "cache-control": "no-cache, no-store, must-revalidate",
+                    },
                 });
+                return response;
             }
 
-            return new Response(JSON.stringify({ result }), {
+            const response = new Response(JSON.stringify({ result }), {
                 status: 200,
-                headers: { "content-type": "application/json" },
+                headers: {
+                    "content-type": "application/json",
+                    "cache-control": "public, max-age=300", // 5 minutes for API
+                },
             });
+            return response;
         } catch (err) {
             console.error("Lua API error:", err);
-            return new Response(JSON.stringify({ error: "Internal server error" }), {
+            const response = new Response(JSON.stringify({ error: "Internal server error" }), {
                 status: 500,
-                headers: { "content-type": "application/json" },
+                headers: {
+                    "content-type": "application/json",
+                    "cache-control": "no-cache, no-store, must-revalidate",
+                },
             });
+            return response;
         }
     }
 
@@ -157,10 +256,9 @@ end
         htmlPath = htmlPath + ".html";
         try {
             const html = await Deno.readTextFile("./dist" + htmlPath);
-            return new Response(html, {
-                status: 200,
-                headers: { "content-type": "text/html; charset=utf-8" },
-            });
+            const response = compressResponse(html, "text/html; charset=utf-8", false);
+            setCachedResponse(path, response);
+            return response;
         } catch {
             // If not found, fall through to serveDir
         }
@@ -173,9 +271,22 @@ end
             urlRoot: "",
         });
 
-        // If the file exists, return it
+        // If the file exists, return it with cache disabled for normal routes
         if (response.status !== 404) {
-            return response;
+            // Clone the response and add no-cache headers for normal routes
+            const headers = new Headers(response.headers);
+            headers.set("cache-control", "no-cache, no-store, must-revalidate");
+            headers.set("pragma", "no-cache");
+            headers.set("expires", "0");
+
+            const modifiedResponse = new Response(response.body, {
+                status: response.status,
+                statusText: response.statusText,
+                headers: headers,
+            });
+
+            setCachedResponse(path, modifiedResponse);
+            return modifiedResponse;
         }
     } catch (error) {
         // Continue to fallback logic
@@ -186,19 +297,18 @@ end
         const indexPath = "./dist/index.html";
         const indexContent = await Deno.readTextFile(indexPath);
 
-        return new Response(indexContent, {
-            status: 200,
-            headers: {
-                "content-type": "text/html; charset=utf-8",
-            },
-        });
+        const response = compressResponse(indexContent, "text/html; charset=utf-8", false);
+        setCachedResponse(path, response);
+        return response;
     } catch (error) {
         // If index.html doesn't exist, return a proper 404
-        return new Response("404 - Page not found", {
+        const response = new Response("404 - Page not found", {
             status: 404,
             headers: {
                 "content-type": "text/plain; charset=utf-8",
+                "cache-control": "no-cache, no-store, must-revalidate",
             },
         });
+        return response;
     }
-}, { port }); 
+}); 

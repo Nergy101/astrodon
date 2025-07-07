@@ -1,7 +1,7 @@
 ---
 title: Welcome to My Blog
-date: 2024-01-15
-author: Your Name
+date: 2025-07-07
+author: Christian / Nergy101
 tags: [blog, introduction]
 ---
 

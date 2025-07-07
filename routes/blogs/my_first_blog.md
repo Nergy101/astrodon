@@ -1,7 +1,7 @@
 ---
 title: My First Blog
 date: 2025-07-07
-author: Chris
+author: Christian / Nergy101
 tags: [blog, deno, lua, first-post]
 ---
 

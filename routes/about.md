@@ -1,7 +1,7 @@
 ---
 title: About
-date: 2024-01-15
-author: Your Name
+date: 2025-07-07
+author: Christian / Nergy101
 tags: [about, documentation, deno, lua]
 ---
 

@@ -2,8 +2,36 @@
 
 import { ensureDir, copy } from "https://deno.land/std@0.208.0/fs/mod.ts";
 import { join, extname, basename, dirname } from "https://deno.land/std@0.208.0/path/mod.ts";
+import { crypto } from "https://deno.land/std@0.208.0/crypto/mod.ts";
 
-// Simple markdown to HTML conversion
+// Cache for processed files to avoid reprocessing unchanged content
+const fileCache = new Map<string, { hash: string; content: string }>();
+
+// Simple hash function for file content
+async function getFileHash(content: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(content);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Check if file needs reprocessing
+async function needsReprocessing(filePath: string, content: string): Promise<boolean> {
+    const cached = fileCache.get(filePath);
+    if (!cached) return true;
+
+    const currentHash = await getFileHash(content);
+    return cached.hash !== currentHash;
+}
+
+// Update cache after processing
+async function updateCache(filePath: string, content: string, processedContent: string) {
+    const hash = await getFileHash(content);
+    fileCache.set(filePath, { hash, content: processedContent });
+}
+
+// Optimized markdown to HTML conversion with consolidated regex operations
 function parseMarkdown(markdown: string): string {
     // Store script tags first to preserve their structure
     const scriptBlocks: string[] = [];
@@ -668,7 +696,7 @@ export async function executeLuaScript(scriptName: string, params?: string[]): P
         }
 
         // Write temporary script
-        const tempFile = `temp_interp_${Date.now()}.lua`;
+        const tempFile = `temp_interp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.lua`;
         await Deno.writeTextFile(tempFile, tempLuaScript);
 
         // Execute Lua script
@@ -737,7 +765,8 @@ print(result)
 `;
 
         // Write temporary script
-        const tempFile = `temp_${Date.now()}.lua`;
+        const safePath = mdPath.replace(/[^a-zA-Z0-9]/g, '_');
+        const tempFile = `temp_${Date.now()}_${safePath}.lua`;
         await Deno.writeTextFile(tempFile, tempLuaScript);
 
         // Execute Lua script
@@ -766,19 +795,64 @@ print(result)
     }
 }
 
-// Process markdown file
+// Process markdown file with caching
 async function processMarkdownFile(filePath: string): Promise<PageData> {
     const content = await Deno.readTextFile(filePath);
 
+    // Check cache first
+    if (!(await needsReprocessing(filePath, content))) {
+        const cached = fileCache.get(filePath);
+        if (cached) {
+            console.log(`⚡ Using cached result for ${filePath}`);
+            buildMetrics.cachedFiles++;
+            // We still need to parse metadata for the return value
+            const meta = await extractMetadata(content);
+            return {
+                content: cached.content,
+                meta,
+                path: filePath
+            };
+        }
+    }
+
     // Extract frontmatter if present
-    let meta: Record<string, any> = {};
+    const meta = await extractMetadata(content);
     let markdownContent = content;
 
     if (content.startsWith('---')) {
         const endIndex = content.indexOf('---', 3);
         if (endIndex !== -1) {
-            const frontmatter = content.substring(3, endIndex).trim();
             markdownContent = content.substring(endIndex + 3).trim();
+        }
+    }
+
+    // Process Lua interpolations in the markdown content
+    const interpolatedContent = await processLuaInterpolations(markdownContent);
+
+    // Parse markdown to HTML (after interpolation)
+    const htmlContent = parseMarkdown(interpolatedContent);
+
+    // Process with Lua template if available
+    const processedContent = await processLuaTemplate(filePath, htmlContent, meta);
+
+    // Update cache
+    await updateCache(filePath, content, processedContent);
+
+    return {
+        content: processedContent,
+        meta,
+        path: filePath
+    };
+}
+
+// Extract metadata from markdown content
+async function extractMetadata(content: string): Promise<Record<string, any>> {
+    const meta: Record<string, any> = {};
+
+    if (content.startsWith('---')) {
+        const endIndex = content.indexOf('---', 3);
+        if (endIndex !== -1) {
+            const frontmatter = content.substring(3, endIndex).trim();
 
             // Simple YAML-like parsing
             for (const line of frontmatter.split('\n')) {
@@ -800,23 +874,7 @@ async function processMarkdownFile(filePath: string): Promise<PageData> {
         }
     }
 
-    // Debug: Log the parsed metadata
-    console.log(`📋 Metadata for ${filePath}:`, JSON.stringify(meta, null, 2));
-
-    // Process Lua interpolations in the markdown content
-    const interpolatedContent = await processLuaInterpolations(markdownContent);
-
-    // Parse markdown to HTML (after interpolation)
-    const htmlContent = parseMarkdown(interpolatedContent);
-
-    // Process with Lua template if available
-    const processedContent = await processLuaTemplate(filePath, htmlContent, meta);
-
-    return {
-        content: processedContent,
-        meta,
-        path: filePath
-    };
+    return meta;
 }
 
 // Generate HTML from template
@@ -925,23 +983,317 @@ function generateNavigationHTML(navItems: NavItem[], currentPath: string = ''): 
     return html;
 }
 
-// Copy assets
+// Copy assets (non-image files)
 async function copyAssets(): Promise<void> {
     const assetsDir = './assets';
     const distAssetsDir = './dist/assets';
 
     try {
         await ensureDir(distAssetsDir);
-        await copy(assetsDir, distAssetsDir, { overwrite: true });
-        console.log('✅ Assets copied to dist/assets/');
+
+        // Copy all assets recursively, excluding images that will be optimized
+        async function copyAssetRecursively(dir: string, basePath: string = '') {
+            try {
+                for await (const entry of Deno.readDir(dir)) {
+                    const sourcePath = join(dir, entry.name);
+                    const relativePath = join(basePath, entry.name);
+                    const destPath = join(distAssetsDir, relativePath);
+
+                    if (entry.isFile) {
+                        const ext = extname(entry.name).toLowerCase();
+                        // Skip image files that will be optimized separately
+                        if (!['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'].includes(ext)) {
+                            await ensureDir(dirname(destPath));
+                            await copy(sourcePath, destPath, { overwrite: true });
+                            console.log(`📁 Copied ${relativePath}`);
+                        }
+                    } else if (entry.isDirectory) {
+                        await ensureDir(destPath);
+                        await copyAssetRecursively(sourcePath, relativePath);
+                    }
+                }
+            } catch (error) {
+                console.log(`ℹ️  Could not read directory ${dir}`);
+            }
+        }
+
+        await copyAssetRecursively(assetsDir);
+        console.log('✅ Non-image assets copied to dist/assets/');
     } catch (error) {
-        console.log('ℹ️  No assets directory found or already copied');
+        console.log('ℹ️  No assets directory found');
+    }
+}
+
+// Optimize images to WebP format using optimizt
+async function optimizeImages(): Promise<void> {
+    const assetsDir = './assets';
+    const distAssetsDir = './dist/assets';
+
+    // Find all image files recursively
+    const imageFiles: Array<{ fullPath: string; relativePath: string }> = [];
+
+    async function findImages(dir: string, basePath: string = '') {
+        try {
+            for await (const entry of Deno.readDir(dir)) {
+                const fullPath = join(dir, entry.name);
+                const relativePath = join(basePath, entry.name);
+
+                if (entry.isFile) {
+                    const ext = extname(entry.name).toLowerCase();
+                    if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'].includes(ext)) {
+                        imageFiles.push({ fullPath, relativePath });
+                    }
+                } else if (entry.isDirectory) {
+                    await findImages(fullPath, relativePath);
+                }
+            }
+        } catch (error) {
+            console.log(`ℹ️  Could not read directory ${dir}`);
+        }
+    }
+
+    try {
+        await ensureDir(distAssetsDir);
+        await findImages(assetsDir);
+
+        if (imageFiles.length === 0) {
+            console.log('ℹ️  No image files found to optimize');
+            return;
+        }
+
+        console.log(`🖼️  Found ${imageFiles.length} images to optimize...`);
+
+        // Check if optimizt is available
+        let optimiztAvailable = false;
+        try {
+            const process = new Deno.Command("optimizt", {
+                args: ["--help"],
+                stdout: "piped",
+                stderr: "piped",
+            });
+            const { code } = await process.output();
+            optimiztAvailable = code === 0;
+        } catch {
+            optimiztAvailable = false;
+        }
+
+        if (!optimiztAvailable) {
+            console.log('⚠️  optimizt not found, copying original images');
+            // Copy original images as fallback
+            for (const { fullPath, relativePath } of imageFiles) {
+                const destPath = join(distAssetsDir, relativePath);
+                await ensureDir(dirname(destPath));
+                await copy(fullPath, destPath, { overwrite: true });
+                console.log(`📁 Copied ${relativePath} (no optimization available)`);
+            }
+            return;
+        }
+
+        // Process each image with optimizt
+        for (const { fullPath, relativePath } of imageFiles) {
+            try {
+                const outputPath = join(distAssetsDir, relativePath.replace(/\.[^.]+$/, '.webp'));
+
+                // Ensure output directory exists
+                await ensureDir(dirname(outputPath));
+
+                // Run optimizt to create WebP version
+                const process = new Deno.Command("optimizt", {
+                    args: [
+                        fullPath,
+                        "--webp",
+                        "--force",
+                    ],
+                    stdout: "piped",
+                    stderr: "piped",
+                });
+
+                const { code, stderr } = await process.output();
+
+                if (code === 0) {
+                    console.log(`✅ Optimized ${relativePath} → ${basename(outputPath)}`);
+                } else {
+                    const error = new TextDecoder().decode(stderr);
+                    console.error(`❌ Failed to optimize ${relativePath}:`, error.toString());
+                    // Fallback: copy original file
+                    const destPath = join(distAssetsDir, relativePath);
+                    await ensureDir(dirname(destPath));
+                    await copy(fullPath, destPath, { overwrite: true });
+                    console.log(`📁 Copied original ${relativePath} as fallback`);
+                }
+
+            } catch (error) {
+                console.error(`❌ Error processing ${fullPath}:`, error);
+                // Fallback: copy original file
+                const destPath = join(distAssetsDir, relativePath);
+                await ensureDir(dirname(destPath));
+                await copy(fullPath, destPath, { overwrite: true });
+                console.log(`📁 Copied original ${relativePath} as fallback`);
+            }
+        }
+
+        console.log('✅ Image optimization complete!');
+
+        // Update all HTML files to reference WebP instead of original formats
+        await updateImageReferences();
+
+    } catch (error) {
+        console.log('ℹ️  Image optimization failed, copying original images');
+        // Copy original images as fallback
+        for (const { fullPath, relativePath } of imageFiles) {
+            const destPath = join(distAssetsDir, relativePath);
+            await ensureDir(dirname(destPath));
+            await copy(fullPath, destPath, { overwrite: true });
+            console.log(`📁 Copied ${relativePath} (optimization failed)`);
+        }
+    }
+}
+
+// Update image references in HTML files to use WebP
+async function updateImageReferences(): Promise<void> {
+    console.log('🔄 Updating image references to WebP...');
+
+    // Find all HTML files in dist
+    const htmlFiles: string[] = [];
+
+    async function findHtmlFiles(dir: string) {
+        try {
+            for await (const entry of Deno.readDir(dir)) {
+                const fullPath = join(dir, entry.name);
+
+                if (entry.isFile && entry.name.endsWith('.html')) {
+                    htmlFiles.push(fullPath);
+                } else if (entry.isDirectory) {
+                    await findHtmlFiles(fullPath);
+                }
+            }
+        } catch (error) {
+            console.log(`ℹ️  Could not read directory ${dir}`);
+        }
+    }
+
+    await findHtmlFiles('./dist');
+
+    if (htmlFiles.length === 0) {
+        console.log('ℹ️  No HTML files found to update');
+        return;
+    }
+
+    console.log(`📝 Updating ${htmlFiles.length} HTML files...`);
+
+    for (const htmlFile of htmlFiles) {
+        try {
+            let content = await Deno.readTextFile(htmlFile);
+
+            // Update image references from PNG to WebP
+            content = content.replace(
+                /(src=["'])([^"']*\.(png|jpg|jpeg|gif|bmp|tiff))([^"']*["'])/gi,
+                (match, prefix, path, ext, suffix) => {
+                    const webpPath = path.replace(/\.[^.]+$/i, '.webp');
+                    return `${prefix}${webpPath}${suffix}`;
+                }
+            );
+
+            // Update CSS background-image references
+            content = content.replace(
+                /(background-image:\s*url\(["']?)([^"']*\.(png|jpg|jpeg|gif|bmp|tiff))([^"']*["']?\))/gi,
+                (match, prefix, path, ext, suffix) => {
+                    const webpPath = path.replace(/\.[^.]+$/i, '.webp');
+                    return `${prefix}${webpPath}${suffix}`;
+                }
+            );
+
+            // Write the updated content back
+            await Deno.writeTextFile(htmlFile, content);
+            console.log(`✅ Updated ${htmlFile}`);
+
+        } catch (error) {
+            console.error(`❌ Failed to update ${htmlFile}:`, error);
+        }
+    }
+
+    console.log('✅ Image reference updates complete!');
+}
+
+// Clean up WebP files from assets directory
+async function cleanupWebpFiles(): Promise<void> {
+    const assetsDir = './assets';
+    let removedCount = 0;
+
+    try {
+        // Recursively find and remove WebP files
+        async function removeWebpFilesRecursively(dir: string) {
+            for await (const entry of Deno.readDir(dir)) {
+                const fullPath = join(dir, entry.name);
+
+                if (entry.isFile && entry.name.endsWith('.webp')) {
+                    try {
+                        await Deno.remove(fullPath);
+                        console.log(`🗑️  Removed: ${fullPath}`);
+                        removedCount++;
+                    } catch (error) {
+                        console.error(`❌ Failed to remove ${fullPath}:`, error);
+                    }
+                } else if (entry.isDirectory) {
+                    await removeWebpFilesRecursively(fullPath);
+                }
+            }
+        }
+
+        await removeWebpFilesRecursively(assetsDir);
+        console.log(`✅ Cleaned up ${removedCount} WebP files`);
+    } catch (error) {
+        console.error('❌ Error during WebP cleanup:', error);
+    }
+}
+
+// Performance monitoring
+const buildMetrics = {
+    startTime: 0,
+    fileProcessingTimes: new Map<string, number>(),
+    totalFiles: 0,
+    cachedFiles: 0,
+    processedFiles: 0
+};
+
+function startBuildTimer() {
+    buildMetrics.startTime = performance.now();
+    buildMetrics.fileProcessingTimes.clear();
+    buildMetrics.totalFiles = 0;
+    buildMetrics.cachedFiles = 0;
+    buildMetrics.processedFiles = 0;
+}
+
+function logBuildMetrics() {
+    const totalTime = performance.now() - buildMetrics.startTime;
+    const avgProcessingTime = buildMetrics.processedFiles > 0
+        ? Array.from(buildMetrics.fileProcessingTimes.values()).reduce((a, b) => a + b, 0) / buildMetrics.processedFiles
+        : 0;
+
+    console.log('\n📊 Build Performance Metrics:');
+    console.log(`⏱️  Total build time: ${totalTime.toFixed(2)}ms`);
+    console.log(`📁 Total files: ${buildMetrics.totalFiles}`);
+    console.log(`⚡ Cached files: ${buildMetrics.cachedFiles}`);
+    console.log(`🔄 Processed files: ${buildMetrics.processedFiles}`);
+    console.log(`📈 Average processing time: ${avgProcessingTime.toFixed(2)}ms`);
+
+    // Show slowest files
+    if (buildMetrics.fileProcessingTimes.size > 0) {
+        const sortedFiles = Array.from(buildMetrics.fileProcessingTimes.entries())
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 3);
+
+        console.log('\n🐌 Slowest files:');
+        sortedFiles.forEach(([file, time]) => {
+            console.log(`  ${file}: ${time.toFixed(2)}ms`);
+        });
     }
 }
 
 // Main build function
 async function build(): Promise<void> {
     console.log('🚀 Starting build...');
+    startBuildTimer();
 
     // Ensure dist directory exists
     await ensureDir('./dist');
@@ -986,8 +1338,12 @@ async function build(): Promise<void> {
         return;
     }
 
-    // Process each markdown file
-    for (const filePath of markdownFiles) {
+    // Process markdown files in parallel for better performance
+    console.log(`📝 Processing ${markdownFiles.length} markdown files...`);
+    buildMetrics.totalFiles = markdownFiles.length;
+
+    const processingPromises = markdownFiles.map(async (filePath) => {
+        const startTime = performance.now();
         console.log(`📝 Processing ${filePath}...`);
 
         try {
@@ -1047,13 +1403,40 @@ async function build(): Promise<void> {
             await Deno.writeTextFile(outputPath, html);
             console.log(`✅ Generated ${outputPath}`);
 
+            // Record processing time
+            const processingTime = performance.now() - startTime;
+            buildMetrics.fileProcessingTimes.set(filePath, processingTime);
+            buildMetrics.processedFiles++;
+
+            return { success: true, filePath, outputPath, processingTime };
+
         } catch (error) {
             console.error(`❌ Error processing ${filePath}:`, error);
+            return { success: false, filePath, error };
         }
-    }
+    });
 
-    // Copy assets
+    // Wait for all files to be processed
+    const results = await Promise.all(processingPromises);
+
+    // Log summary
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+    console.log(`📊 Build summary: ${successful} files processed successfully, ${failed} failed`);
+
+    // Copy assets and optimize images
+    console.log('📁 Copying assets...');
     await copyAssets();
+
+    console.log('🖼️  Optimizing images...');
+    await optimizeImages();
+
+    // Log performance metrics
+    logBuildMetrics();
+
+    // Clean up WebP files
+    console.log('🧹 Cleaning up WebP files...');
+    await cleanupWebpFiles();
 
     console.log('🎉 Build complete!');
 }

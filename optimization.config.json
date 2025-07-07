@@ -1,0 +1,51 @@
+{
+  "build": {
+    "cache": {
+      "enabled": true,
+      "ttl": 300000,
+      "maxSize": 100
+    },
+    "parallel": {
+      "enabled": true,
+      "maxConcurrency": 4
+    },
+    "monitoring": {
+      "enabled": true,
+      "logSlowFiles": true,
+      "slowFileThreshold": 1000
+    }
+  },
+  "server": {
+    "cache": {
+      "enabled": true,
+      "ttl": 300000
+    },
+    "compression": {
+      "enabled": true,
+      "minSize": 1024
+    },
+    "performance": {
+      "maxConcurrentRequests": 100,
+      "requestTimeout": 30000
+    }
+  },
+  "css": {
+    "optimization": {
+      "minify": false,
+      "purgeUnused": false,
+      "criticalPath": false
+    },
+    "performance": {
+      "willChange": true,
+      "contain": true,
+      "hardwareAcceleration": true
+    }
+  },
+  "lua": {
+    "optimization": {
+      "caching": true,
+      "cacheDuration": 1,
+      "maxExecutionTime": 5000
+    }
+  }
+}

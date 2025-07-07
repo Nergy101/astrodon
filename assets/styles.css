@@ -50,6 +50,45 @@
   --transition-fast: 0.15s ease-in-out;
   --transition-normal: 0.2s ease-in-out;
   --transition-slow: 0.5s ease-in-out;
+  
+  /* Performance optimizations */
+  --will-change: auto;
+  --contain: none;
+}
+
+/* ===== PERFORMANCE OPTIMIZATIONS ===== */
+
+/* Optimize paint and layout operations */
+.navbar,
+.theme-toggle,
+.nav-link,
+.feature-card {
+  will-change: var(--will-change);
+  contain: var(--contain);
+}
+
+/* Use transform instead of top/left for animations */
+.nav-dropdown-content {
+  transform: translateY(-10px);
+  opacity: 0;
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.nav-dropdown:hover .nav-dropdown-content {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* Optimize scrolling performance */
+html {
+  scroll-behavior: smooth;
+  /* Enable hardware acceleration for smooth scrolling */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Reduce repaints for fixed elements */
+.navbar {
+  transform: translateZ(0); /* Force hardware acceleration */
 }
 
 /* ===== BASE STYLES ===== */

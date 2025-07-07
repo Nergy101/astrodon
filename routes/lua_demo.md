@@ -1,7 +1,7 @@
 ---
 title: 'Lua Interpolation Demo'
-author: 'Chris'
-date: '2024-12-19'
+date: 2025-07-07
+author: Christian / Nergy101
 tags: ['demo', 'lua', 'interpolation']
 ---
 
