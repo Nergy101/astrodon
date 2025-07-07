@@ -1,5 +1,21 @@
 {
   "version": "5",
+  "specifiers": {
+    "npm:wasmoon@1.16.0": "1.16.0",
+    "npm:wasmoon@^1.16.0": "1.16.0"
+  },
+  "npm": {
+    "@types/emscripten@1.39.10": {
+      "integrity": "sha512-TB/6hBkYQJxsZHSqyeuO1Jt0AB/bW6G7rHt9g7lML7SOF6lbgcHvw/Lr+69iqN0qxgXLhWKScAon73JNnptuDw=="
+    },
+    "wasmoon@1.16.0": {
+      "integrity": "sha512-FlRLb15WwAOz1A9OQDbf6oOKKSiefi5VK0ZRF2wgH9xk3o5SnU11tNPaOnQuAh1Ucr66cwwvVXaeVRaFdRBt5g==",
+      "dependencies": [
+        "@types/emscripten"
+      ],
+      "bin": true
+    }
+  },
   "remote": {
     "https://deno.land/std@0.208.0/assert/assert.ts": "9a97dad6d98c238938e7540736b826440ad8c1c1e54430ca4c4e623e585607ee",
     "https://deno.land/std@0.208.0/assert/assertion_error.ts": "4d0bde9b374dfbcbe8ac23f54f567b77024fb67dbb1906a852d67fe050d42f56",
@@ -113,5 +129,10 @@
     "https://deno.land/std@0.208.0/path/windows/to_namespaced_path.ts": "e0f4d4a5e77f28a5708c1a33ff24360f35637ba6d8f103d19661255ef7bfd50d",
     "https://deno.land/std@0.208.0/streams/byte_slice_stream.ts": "c46d7c74836fc8c1a9acd9fe211cbe1bbaaee1b36087c834fb03af4991135c3a",
     "https://deno.land/std@0.208.0/version.ts": "a3207ea06bba42f09c7c7ab46590b202c98366f26d2ae31622a4839257dbc790"
+  },
+  "workspace": {
+    "dependencies": [
+      "npm:wasmoon@^1.16.0"
+    ]
   }
 }

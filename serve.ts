@@ -3,6 +3,7 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { serveDir } from "https://deno.land/std@0.208.0/http/file_server.ts";
 import { extname } from "https://deno.land/std@0.208.0/path/mod.ts";
+import { LuaFactory } from "npm:wasmoon@1.16.0";
 
 const port = 8000;
 
@@ -15,7 +16,7 @@ await serve(async (req) => {
     const path = url.pathname;
 
     // API endpoint for current UTC time from Lua
-    if (path === "/api/time") {
+    if (path === "/lua-scripts/time") {
         try {
             const process = new Deno.Command("lua", {
                 args: ["api/get_time.lua"],
@@ -37,6 +38,113 @@ await serve(async (req) => {
             });
         } catch (err) {
             return new Response(JSON.stringify({ error: String(err) }), {
+                status: 500,
+                headers: { "content-type": "application/json" },
+            });
+        }
+    }
+
+    // API endpoint for executing Lua modules (SECURE VERSION)
+    if (path === "/lua-scripts/lua-execute" && req.method === "POST") {
+        try {
+            const body = await req.json();
+            const { module, context } = body;
+
+            // SECURITY: Only allow specific modules
+            const allowedModules = ["render-time"];
+            if (!allowedModules.includes(module)) {
+                return new Response(JSON.stringify({ error: `Module '${module}' not allowed` }), {
+                    status: 403,
+                    headers: { "content-type": "application/json" },
+                });
+            }
+
+            // SECURITY: Validate and sanitize context
+            const sanitizedContext: { format?: string; timezone?: string } = {};
+            if (context && typeof context === 'object') {
+                // Only allow specific context properties for render-time
+                if (module === "render-time") {
+                    const allowedFormats = ["iso", "local", "utc", "date", "time", "datetime", "friendly"];
+                    const allowedTimezones = ["utc", "local"];
+
+                    if (context.format && allowedFormats.includes(context.format)) {
+                        sanitizedContext.format = context.format;
+                    }
+                    if (context.timezone && allowedTimezones.includes(context.timezone)) {
+                        sanitizedContext.timezone = context.timezone;
+                    }
+                }
+            }
+
+            // SECURITY: Use predefined, safe Lua scripts only
+            let luaScript = "";
+
+            if (module === "render-time") {
+                const format = sanitizedContext.format || "iso";
+                const timezone = sanitizedContext.timezone || "utc";
+
+                // SECURITY: Use parameterized script with validation
+                luaScript = `
+local os = require("os")
+local format = "${format}"
+local timezone = "${timezone}"
+
+-- SECURITY: Validate format parameter
+local validFormats = {iso = true, local = true, utc = true, date = true, time = true, datetime = true, friendly = true}
+if not validFormats[format] then
+    format = "iso"
+end
+
+if format == "iso" then
+    return os.date("!%Y-%m-%dT%H:%M:%SZ")
+elseif format == "local" then
+    return os.date("%Y-%m-%d %H:%M:%S")
+elseif format == "utc" then
+    return os.date("!%Y-%m-%d %H:%M:%S")
+elseif format == "date" then
+    return os.date("%Y-%m-%d")
+elseif format == "time" then
+    return os.date("%H:%M:%S")
+elseif format == "datetime" then
+    return os.date("%Y-%m-%d %H:%M:%S")
+elseif format == "friendly" then
+    return "Just now"
+else
+    return os.date("!%Y-%m-%dT%H:%M:%SZ")
+end
+                `;
+            }
+
+            // Use WASMOON to execute Lua code securely in memory
+            let result = "";
+            try {
+                const factory = new LuaFactory();
+                const lua = await factory.createEngine();
+                result = await lua.doString(luaScript);
+                await lua.close();
+            } catch (err) {
+                console.error("Lua execution error:", err);
+                return new Response(JSON.stringify({ error: "Execution failed" }), {
+                    status: 500,
+                    headers: { "content-type": "application/json" },
+                });
+            }
+
+            // SECURITY: Limit output size
+            if (typeof result === "string" && result.length > 1000) {
+                return new Response(JSON.stringify({ error: "Output too large" }), {
+                    status: 413,
+                    headers: { "content-type": "application/json" },
+                });
+            }
+
+            return new Response(JSON.stringify({ result }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+            });
+        } catch (err) {
+            console.error("Lua API error:", err);
+            return new Response(JSON.stringify({ error: "Internal server error" }), {
                 status: 500,
                 headers: { "content-type": "application/json" },
             });

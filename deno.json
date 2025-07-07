@@ -7,6 +7,7 @@
   },
   "imports": {
     "markdown": "https://deno.land/x/markdown@v2.2.1/mod.ts",
-    "lua": "https://deno.land/x/lua@v0.0.1/mod.ts"
+    "lua": "https://deno.land/x/lua@v0.0.1/mod.ts",
+    "wasmoon": "npm:wasmoon@^1.16.0"
   }
 }

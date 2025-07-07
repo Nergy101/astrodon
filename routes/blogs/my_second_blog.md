@@ -7,9 +7,11 @@ tags: [blog, deno, markdown, showcase]
 
 # My Second Blog - Markdown Showcase
 
-Welcome back! This is my second blog post where I'll showcase **all the different markdown tags** and demonstrate how to integrate with our `/api/time` endpoint.
+Welcome back! This is my second blog post where I'll showcase **all the different markdown tags** and demonstrate how to integrate with our `/lua-scripts/time` endpoint.
 
-> **Page rendered at (via Lua):** <span id="lua-render-time">Loading...</span>
+> **Page rendered at (via Lua):** <span id="lua-render-time">Loading...</span> > **Local Time:** <span id="lua-render-time" data-format="local">Loading...</span> > **Friendly Time:** <span id="lua-render-time" data-format="friendly">Loading...</span>
+
+_The above times are rendered dynamically using Lua in the browser or via the server._
 
 ## Text Formatting
 

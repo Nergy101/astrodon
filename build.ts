@@ -618,6 +618,96 @@ function jsToLuaTable(obj: any): string {
     }
 }
 
+// Lua interpolation system
+export interface LuaInterpolation {
+    script: string;
+    params?: string[];
+    fullMatch: string;
+}
+
+export function parseLuaInterpolations(content: string): LuaInterpolation[] {
+    const interpolations: LuaInterpolation[] = [];
+
+    // Match patterns like {{lua:script_name}} or {{lua:script_name:param1,param2}}
+    const regex = /\{\{lua:([^:}]+)(?::([^}]+))?\}\}/g;
+    let match;
+
+    while ((match = regex.exec(content)) !== null) {
+        interpolations.push({
+            script: match[1].trim(),
+            params: match[2] ? match[2].split(',').map(p => p.trim()) : undefined,
+            fullMatch: match[0]
+        });
+    }
+
+    return interpolations;
+}
+
+export async function executeLuaScript(scriptName: string, params?: string[]): Promise<string> {
+    const luaPath = `./lua-scripts/${scriptName}.lua`;
+
+    try {
+        // Check if the script exists
+        await Deno.stat(luaPath);
+
+        // Create a temporary Lua script that executes the target script
+        let tempLuaScript = `dofile("${luaPath}")\n`;
+
+        // If the script has a main function, call it with parameters
+        if (params && params.length > 0) {
+            tempLuaScript += `\n-- Call main function with parameters\n`;
+            tempLuaScript += `if main then\n`;
+            tempLuaScript += `  local result = main(${params.map(p => `"${p}"`).join(', ')})\n`;
+            tempLuaScript += `  if result then\n`;
+            tempLuaScript += `    print(result)\n`;
+            tempLuaScript += `  end\n`;
+            tempLuaScript += `end\n`;
+        } else {
+            // If no parameters, just execute the script and capture any output
+            tempLuaScript += `\n-- Script executed without parameters\n`;
+        }
+
+        // Write temporary script
+        const tempFile = `temp_interp_${Date.now()}.lua`;
+        await Deno.writeTextFile(tempFile, tempLuaScript);
+
+        // Execute Lua script
+        const process = new Deno.Command("lua", {
+            args: [tempFile],
+            stdout: "piped",
+            stderr: "piped",
+        });
+
+        const { code, stdout, stderr } = await process.output();
+        const output = new TextDecoder().decode(stdout);
+        const error = new TextDecoder().decode(stderr);
+
+        // Clean up temp file
+        await Deno.remove(tempFile);
+
+        if (code !== 0) {
+            console.error(`Lua interpolation error for ${scriptName}:`, error);
+            return `[Lua Error: ${scriptName}]`;
+        }
+
+        return output.trim();
+    } catch (error) {
+        console.error(`Lua script not found or failed: ${luaPath}`);
+        return `[Lua Script Not Found: ${scriptName}]`;
+    }
+}
+
+export async function processLuaInterpolations(content: string): Promise<string> {
+    const interpolations = parseLuaInterpolations(content);
+
+    for (const interpolation of interpolations) {
+        const result = await executeLuaScript(interpolation.script, interpolation.params);
+        content = content.replace(interpolation.fullMatch, result);
+    }
+
+    return content;
+}
+
 // Process Lua template if it exists
 async function processLuaTemplate(mdPath: string, content: string, meta: Record<string, any>): Promise<string> {
     const luaPath = './template.lua';
@@ -710,11 +800,14 @@ async function processMarkdownFile(filePath: string): Promise<PageData> {
         }
     }
 
-    // Parse markdown to HTML
-    const htmlContent = parseMarkdown(markdownContent);
-
     // Debug: Log the parsed metadata
     console.log(`📋 Metadata for ${filePath}:`, JSON.stringify(meta, null, 2));
+
+    // Process Lua interpolations in the markdown content
+    const interpolatedContent = await processLuaInterpolations(markdownContent);
+
+    // Parse markdown to HTML (after interpolation)
+    const htmlContent = parseMarkdown(interpolatedContent);
 
     // Process with Lua template if available
     const processedContent = await processLuaTemplate(filePath, htmlContent, meta);
@@ -734,6 +827,18 @@ function generateHTML(content: string, meta: Record<string, any>, navigation: st
     html = html.replace('{{title}}', meta.title || 'My Blog');
     html = html.replace('{{content}}', content);
     html = html.replace('{{navigation}}', navigation);
+
+    // Add Lua WASM runtime script
+    const luaRuntimeScript = `
+    <script type="application/lua" data-module="render-time">
+-- Simple render time module for backward compatibility
+local os = require("os")
+local format = "iso"
+return os.date("!%Y-%m-%dT%H:%M:%SZ")
+    </script>
+    `;
+
+    html = html.replace('</head>', luaRuntimeScript + '</head>');
 
     return html;
 }
