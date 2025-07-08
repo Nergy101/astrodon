@@ -310,9 +310,10 @@ function parseMarkdown(markdown: string): string {
         })
         // Horizontal rules (---) - process before paragraph wrapping
         .replace(/^[ ]*---[ ]*$/gm, '<hr>')
-        // Line breaks
+        // Line breaks - be more selective about when to add <br> tags
         .replace(/\n\n/g, '</p><p>')
-        .replace(/\n/g, '<br>')
+        // Only add <br> for single newlines that are not between list items or other block elements
+        .replace(/(?<!<\/li>)\n(?!<[uo]l>|<li>|<\/[uo]l>|<dl>|<dt>|<dd>|<\/dl>|<table>|<thead>|<tbody>|<tr>|<th>|<td>|<\/table>|<\/thead>|<\/tbody>|<\/tr>|<\/th>|<\/td>)/g, '<br>')
         // Wrap in paragraphs (exclude HTML elements, blockquotes, and code block placeholders)
         .replace(/^(?!<[^>]*>)(?!> )(?!@@CODEBLOCK\d+@@)(.*)$/gm, '<p>$1</p>')
         // Clean up empty paragraphs
