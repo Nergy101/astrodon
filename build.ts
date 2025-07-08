@@ -453,6 +453,57 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
         // Add event listener to theme toggle
         document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
 
+        // Initialize syntax highlighting
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof Prism !== 'undefined') {
+                Prism.highlightAll();
+            }
+            
+            // Add copy button functionality
+            document.querySelectorAll('.copy-button').forEach(button => {
+                button.addEventListener('click', function() {
+                    const codeBlock = this.closest('.code-block-container');
+                    const codeElement = codeBlock.querySelector('code');
+                    
+                    if (codeElement) {
+                        // Get the raw text content (without HTML tags)
+                        const textToCopy = codeElement.textContent || codeElement.innerText;
+                        
+                        navigator.clipboard.writeText(textToCopy).then(() => {
+                            // Visual feedback
+                            const originalText = this.textContent;
+                            this.textContent = 'Copied!';
+                            this.classList.add('copied');
+                            
+                            setTimeout(() => {
+                                this.textContent = originalText;
+                                this.classList.remove('copied');
+                            }, 2000);
+                        }).catch(err => {
+                            console.error('Failed to copy code:', err);
+                            // Fallback for older browsers
+                            const textArea = document.createElement('textarea');
+                            textArea.value = textToCopy;
+                            document.body.appendChild(textArea);
+                            textArea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(textArea);
+                            
+                            // Visual feedback
+                            const originalText = this.textContent;
+                            this.textContent = 'Copied!';
+                            this.classList.add('copied');
+                            
+                            setTimeout(() => {
+                                this.textContent = originalText;
+                                this.classList.remove('copied');
+                            }, 2000);
+                        });
+                    }
+                });
+            });
+        });
+
         // Header anchor functionality
         document.addEventListener('click', function(e) {
             if (e.target.classList.contains('header-anchor')) {
@@ -863,17 +914,21 @@ function generateHTML(content: string, meta: Record<string, any>, navigation: st
     html = html.replace('{{content}}', content);
     html = html.replace('{{navigation}}', navigation);
 
-    // Add Lua WASM runtime script
-    const luaRuntimeScript = `
+    // Add Lua WASM runtime script and Prism.js scripts
+    const additionalScripts = `
     <script type="application/lua" data-module="render-time">
 -- Simple render time module for backward compatibility
 local os = require("os")
 local format = "iso"
 return os.date("!%Y-%m-%dT%H:%M:%SZ")
     </script>
+    <!-- Prism.js for syntax highlighting -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
     `;
 
-    html = html.replace('</head>', luaRuntimeScript + '</head>');
+    html = html.replace('</head>', additionalScripts + '</head>');
 
     return html;
 }
