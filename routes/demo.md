@@ -15,9 +15,7 @@ Welcome to the comprehensive demo page! This showcases **all the different markd
 
 > {{lua:random_quote}}
 
-**Current Time (ISO):** {{lua:current_time}}
-
-**Current Time (Friendly):** {{lua:current_time:friendly}}
+**Current Time:** {{lua:current_time:friendly}}
 
 ## Text Formatting
 
