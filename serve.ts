@@ -68,6 +68,57 @@ console.log(`📁 Serving files from ./dist/`);
 console.log(`🔄 Auto fallback to index.html enabled`);
 console.log(`⚡ API caching enabled (5min TTL), normal routes disabled`);
 
+// Function to generate tree view of dist directory
+async function generateTreeView(dirPath: string, prefix: string = "", isLast: boolean = true): Promise<string[]> {
+    const tree: string[] = [];
+    try {
+        const entries = [];
+        for await (const entry of Deno.readDir(dirPath)) {
+            entries.push(entry);
+        }
+
+        // Sort entries: directories first, then files
+        entries.sort((a, b) => {
+            if (a.isDirectory && !b.isDirectory) return -1;
+            if (!a.isDirectory && b.isDirectory) return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i];
+            const isLastEntry = i === entries.length - 1;
+            const connector = isLastEntry ? "└── " : "├── ";
+            const nextPrefix = isLastEntry ? "    " : "│   ";
+
+            tree.push(`${prefix}${connector}${entry.name}${entry.isDirectory ? "/" : ""}`);
+
+            if (entry.isDirectory) {
+                const subTree = await generateTreeView(
+                    `${dirPath}/${entry.name}`,
+                    prefix + nextPrefix,
+                    isLastEntry
+                );
+                tree.push(...subTree);
+            }
+        }
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        tree.push(`${prefix}└── [Error reading directory: ${errorMessage}]`);
+    }
+    return tree;
+}
+
+// Display tree view of dist directory
+console.log(`\n📂 File tree for ./dist/:`);
+try {
+    const treeLines = await generateTreeView("./dist");
+    treeLines.forEach(line => console.log(line));
+} catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.log(`❌ Error generating tree view: ${errorMessage}`);
+}
+console.log(""); // Empty line for better readability
+
 await serve(
     async (req) => {
         const url = new URL(req.url);
