@@ -60,7 +60,10 @@ function parseMarkdown(markdown: string): string {
     });
 
     // Links (process after images to avoid conflicts)
-    markdown = markdown.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    markdown = markdown.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
+        // Add target="_blank" to all links
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    });
 
     // --- NESTED LISTS HANDLING ---
     // We'll process the markdown line by line for lists, then join back for the rest of the regexes

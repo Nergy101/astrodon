@@ -1,8 +1,8 @@
 ---
-title: 'Demo - Markdown & Lua Interpolation Showcase'
+title: Demo - Markdown & Lua Interpolation Showcase
 date: 2025-07-07
 author: Christian / Nergy101
-tags: ['demo', 'markdown', 'lua', 'interpolation', 'showcase']
+tags: [demo, markdown, lua, interpolation, showcase]
 ---
 
 # Demo - Markdown & Lua Interpolation Showcase
