@@ -58,11 +58,28 @@ function parseMarkdown(markdown: string): string {
         webpSrc = webpSrc.replace(/[#?].*$/, '');
         webpSrc = webpSrc.replace(/\.[^.\/]+$/, '.webp');
 
-        // Create picture element with WebP and original fallback
-        return `<picture>
-            <source srcset="${webpSrc}" type="image/webp">
-            <img src="${origSrc}" alt="${alt}">
-        </picture>`;
+        // Check if WebP file exists in dist/assets
+        const webpPath = webpSrc.replace('/assets/', './dist/assets/');
+        let webpExists = false;
+        try {
+            // Synchronous check for file existence
+            const stat = Deno.statSync(webpPath);
+            webpExists = stat.isFile;
+        } catch {
+            // File doesn't exist
+            webpExists = false;
+        }
+
+        // Create picture element with WebP and original fallback, only if WebP exists
+        if (webpExists) {
+            return `<picture>
+                <source srcset="${webpSrc}" type="image/webp">
+                <img src="${origSrc}" alt="${alt}">
+            </picture>`;
+        } else {
+            // If WebP doesn't exist, just use the original image
+            return `<img src="${origSrc}" alt="${alt}">`;
+        }
     });
 
     // Links (process after images to avoid conflicts)
