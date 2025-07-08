@@ -1035,12 +1035,12 @@ pre code {
 /* ===== LISTS ===== */
 
 ul, ol {
-  margin: var(--spacing-md) 0;
+  margin: var(--spacing-sm) 0;
   padding-left: var(--spacing-xl);
 }
 
 li {
-  margin: var(--spacing-sm) 0;
+  margin: var(--spacing-xs) 0;
   color: var(--text-secondary);
 }
 

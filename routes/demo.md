@@ -1,13 +1,23 @@
 ---
-title: My Second Blog - Markdown Showcase
+title: 'Demo - Markdown & Lua Interpolation Showcase'
 date: 2025-07-07
 author: Christian / Nergy101
-tags: [blog, deno, markdown, showcase]
+tags: ['demo', 'markdown', 'lua', 'interpolation', 'showcase']
 ---
 
-# My Second Blog - Markdown Showcase
+# Demo - Markdown & Lua Interpolation Showcase
 
-Welcome back! This is my second blog post where I'll showcase **all the different markdown tags**.
+Welcome to the comprehensive demo page! This showcases **all the different markdown features** combined with **dynamic Lua interpolation**.
+
+## Dynamic Content with Lua
+
+**Today's Programming Quote:**
+
+> {{lua:random_quote}}
+
+**Current Time (ISO):** {{lua:current_time}}
+
+**Current Time (Friendly):** {{lua:current_time:friendly}}
 
 ## Text Formatting
 
@@ -31,6 +41,14 @@ And an ordered list:
 3. Third numbered item
    1. Nested item
    2. Another nested item
+
+## Dynamic Counters
+
+**Simple Counter:** {{lua:counter:Item,3}}
+
+**Step Counter:** {{lua:counter:Step,5}}
+
+**Custom Counter:** {{lua:counter:Task,4}}
 
 ## Code Blocks
 
@@ -61,6 +79,16 @@ print(greet("World"))
 ```
 
 This will show the time the page was rendered, using Lua running in the browser via WASM.
+
+## Time Formats Showcase
+
+**Local Format:** {{lua:current_time:local}}
+
+**Date Only:** {{lua:current_time:date}}
+
+**Time Only:** {{lua:current_time:time}}
+
+**Unix Timestamp:** {{lua:current_time:unix}}
 
 ## Tables
 
@@ -102,11 +130,23 @@ Or multiple lines
 - [x] Create basic web server
 - [x] Integrate Lua scripts
 - [x] Add markdown support
+- [x] Implement Lua interpolation
 - [ ] Implement WebSocket connections
 - [ ] Add database integration
 - [ ] Create custom Lua modules
 
-[^3]: This famous equation relates energy (E) to mass (m) and the speed of light (c), discovered by Albert Einstein in 1905.
+## Dynamic List Generation
+
+Here's a dynamic list of items:
+
+{{lua:counter:Feature,6}}
+
+## Real-time Status
+
+- **Build Time:** {{lua:current_time:friendly}}
+- **Current Date:** {{lua:current_time:date}}
+- **Current Time:** {{lua:current_time:time}}
+- **Unix Timestamp:** {{lua:current_time:unix}}
 
 ## Definition Lists
 
@@ -134,6 +174,17 @@ The HTML and CSS are used to style this page, while the API provides dynamic con
 [^1]: Deno's startup time is typically under 50ms, making it ideal for CLI tools and microservices.
 [^2]: Lua is one of the fastest scripting languages, with a small memory footprint and excellent performance characteristics.
 
+## How Lua Interpolation Works
+
+This page uses the `{{lua:script_name}}` syntax to embed Lua script results directly in the markdown. During the build process:
+
+1. The system finds all `{{lua:...}}` patterns
+2. Executes the corresponding Lua scripts
+3. Replaces the patterns with the script output
+4. Processes the result through the markdown pipeline
+
+The dynamic content you see above is generated fresh each time the site is built!
+
 ## What's Next?
 
 I'm excited to explore more advanced features like:
@@ -151,4 +202,4 @@ I'm excited to explore more advanced features like:
 
 ---
 
-_This page demonstrates all major markdown features including headings, text formatting, lists, code blocks, tables, links, images, blockquotes, task lists, mathematical expressions, footnotes, and more!_
+_This page demonstrates all major markdown features including headings, text formatting, lists, code blocks, tables, links, images, blockquotes, task lists, mathematical expressions, footnotes, and dynamic Lua interpolation!_
