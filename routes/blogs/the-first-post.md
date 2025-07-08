@@ -1,8 +1,8 @@
 ---
-title: 'Welcome to my Blog'
+title: Nergy | Welcome to my Blog
 date: 2024-11-27
 author: Christian / Nergy101
-tags: [introduction]
+tags: [intro]
 ---
 
 This will mark my first post as I begin my Blogging journey in the tech industry.

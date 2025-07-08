@@ -18,7 +18,7 @@ function render(content, context)
   if meta.tags and type(meta.tags) == 'table' then
     metadata = metadata .. '<div class="tags">'
     for i, tag in ipairs(meta.tags) do
-      metadata = metadata .. string.format('<span class="tag">#%s</span>', tag)
+      metadata = metadata .. string.format('<span class="tag">%s</span>', tag)
     end
     metadata = metadata .. '</div>'
   end

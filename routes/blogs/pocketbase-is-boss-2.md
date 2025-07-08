@@ -1,8 +1,8 @@
 ---
-title: 'PocketBase is Boss'
+title: Nergy | PocketBase is Boss
 date: 2024-12-10
 author: Christian / Nergy101
-tags: [pocketbase]
+tags: [Pocketbase]
 ---
 
 I'm sure you've all heard of Backend as a Service or BaaS.
