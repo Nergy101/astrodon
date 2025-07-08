@@ -28,13 +28,47 @@ Let's have a quick look at how to get started with PocketBase.
 
 Self-host in your preferred way, either with Docker or simply by running the executable. Then visit `localhost:8090/_/` to be visited by the dashboard. Within this dashboard, we can manage the authentication providers, database schema, the data inside, logging, and different kinds of settings.
 
-Managing your data schema is really easy & visual:
+Managing your data schema is really easy & visual,
+Just add the fields you want for a collection, and you're done! Notice how there are some quite complex types you can add easily like rich text editor texts, emails, and whole files. Also, take special mention of the 'relation' type which allows for configuring 1-n or n-1 or 1-1 relationships between different collections.
 
-```
-[FIGURE PLACEHOLDER]
+## Basic JavaScript SDK Usage
+
+Once you have your PocketBase instance running, you can easily interact with it using the JavaScript SDK. Here's a quick example:
+
+```javascript
+import PocketBase from 'pocketbase';
+
+// Initialize the client
+const pb = new PocketBase('http://127.0.0.1:8090');
+
+// Authenticate a user
+const authData = await pb
+  .collection('users')
+  .authWithPassword('test@example.com', '1234567890');
+
+// Create a new record
+const data = {
+  title: 'My First Post',
+  content: 'Hello PocketBase!',
+  author: pb.authStore.model.id,
+};
+const record = await pb.collection('posts').create(data);
+
+// Fetch records with filtering
+const records = await pb.collection('posts').getList(1, 20, {
+  filter: 'created >= "2024-01-01"',
+  sort: '-created',
+});
+
+// Real-time subscription
+pb.collection('posts').subscribe('*', function (e) {
+  console.log('Real-time update:', e.record);
+});
 ```
 
-Just add the fields you want for this collection, and you're done! Notice how there are some quite complex types you can add easily like rich text editor texts, emails, and whole files. Also, take special mention of the 'relation' type which allows for configuring 1-n or n-1 or 1-1 relationships between different collections.
+The SDK makes it incredibly simple to handle authentication, CRUD operations, and real-time updates with just a few lines of code.
+
+## Conclusion
 
 If you want more on PocketBase, be sure to sign up, follow or even contact me. It's my plan to update this blog into a full tutorial and getting-started. Hope to see you around!
 
