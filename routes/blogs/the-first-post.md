@@ -5,6 +5,8 @@ author: Christian / Nergy101
 tags: [intro]
 ---
 
+# Welcome to my Blog
+
 This will mark my first post as I begin my Blogging journey in the tech industry.
 
 As a professional Software Engineer for about 5 years now, I'm increasingly finding out how I enjoy sharing knowledge and teaching others...

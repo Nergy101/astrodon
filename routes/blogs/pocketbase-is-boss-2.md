@@ -5,6 +5,8 @@ author: Christian / Nergy101
 tags: [Pocketbase]
 ---
 
+# PocketBase: The Single-File Backend That's Actually Boss
+
 I'm sure you've all heard of Backend as a Service or BaaS.
 
 Just to name a few:
