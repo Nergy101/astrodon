@@ -316,7 +316,7 @@ function parseMarkdown(markdown: string): string {
         // Line breaks - be more selective about when to add <br> tags
         .replace(/\n\n/g, '</p><p>')
         // Only add <br> for single newlines that are not between list items or other block elements
-        .replace(/(?<!<\/li>)\n(?!<[uo]l>|<li>|<\/[uo]l>|<dl>|<dt>|<dd>|<\/dl>|<table>|<thead>|<tbody>|<tr>|<th>|<td>|<\/table>|<\/thead>|<\/tbody>|<\/tr>|<\/th>|<\/td>)/g, '<br>')
+        .replace(/(?<!<\/li>)\n(?!<[uo]l>|<li>|<\/[uo]l>|<dl>|<dt>|<dd>|<\/dl>|<table>|<thead>|<tbody>|<tr>|<th>|<td>|<\/table>|<\/thead>|<\/tbody>|<\/tr>|<\/th>|<\/td>|<div|<\/div>|<h[1-6]>|<\/h[1-6]>|<p>|<\/p>|<blockquote>|<\/blockquote>|<hr>|<pre>|<\/pre>|<code>|<\/code>|<strong>|<\/strong>|<em>|<\/em>|<del>|<\/del>|<a\b|<\/a>|<img\b|<\/img>|<abbr>|<\/abbr>|<sup>|<\/sup>|<span>|<\/span>)/g, '<br>')
         // Wrap in paragraphs (exclude HTML elements, blockquotes, and code block placeholders)
         .replace(/^(?!<[^>]*>)(?!> )(?!@@CODEBLOCK\d+@@)(.*)$/gm, '<p>$1</p>')
         // Clean up empty paragraphs
@@ -334,7 +334,24 @@ function parseMarkdown(markdown: string): string {
         .replace(/<br>\s*<dd>/g, '<dd>')
         .replace(/<\/dd>\s*<br>/g, '</dd>')
         // Remove <br> tags that are inside HTML elements
-        .replace(/(<[^>]+>)([^<]*?)<br>([^<]*?)(<\/[^>]+>)/g, '$1$2 $3$4');
+        .replace(/(<[^>]+>)([^<]*?)<br>([^<]*?)(<\/[^>]+>)/g, '$1$2 $3$4')
+        // Additional cleanup for blog cards and other HTML structures
+        .replace(/<br>\s*<div class="blog-card">/g, '<div class="blog-card">')
+        .replace(/<\/div>\s*<br>/g, '</div>')
+        .replace(/<br>\s*<div class="blog-card-header">/g, '<div class="blog-card-header">')
+        .replace(/<br>\s*<div class="blog-card-meta">/g, '<div class="blog-card-meta">')
+        .replace(/<br>\s*<div class="blog-card-tags">/g, '<div class="blog-card-tags">')
+        .replace(/<br>\s*<h3 class="blog-card-title">/g, '<h3 class="blog-card-title">')
+        .replace(/<br>\s*<a class="blog-card-link">/g, '<a class="blog-card-link">')
+        .replace(/<br>\s*<span class="blog-card-date">/g, '<span class="blog-card-date">')
+        .replace(/<br>\s*<span class="blog-card-author">/g, '<span class="blog-card-author">')
+        .replace(/<br>\s*<span class="blog-card-tag">/g, '<span class="blog-card-tag">')
+        .replace(/<br>\s*<p class="blog-card-excerpt">/g, '<p class="blog-card-excerpt">')
+        // Remove <br> tags that appear between HTML elements
+        .replace(/>\s*<br>\s*</g, '> <')
+        // Remove <br> tags at the beginning or end of HTML elements
+        .replace(/<br>\s*>/g, '>')
+        .replace(/>\s*<br>/g, '>');
 
     // Replace code block placeholders with simple pre/code blocks AFTER all other processing
     markdown = markdown.replace(/@@CODEBLOCK(\d+)@@/g, (match, index) => {
@@ -768,6 +785,96 @@ export async function processLuaInterpolations(content: string): Promise<string>
     return content;
 }
 
+// Process TOC marker and replace with blog cards
+async function processTOCMarker(content: string, filePath: string): Promise<string> {
+    const marker = '{{routes:toc}}';
+    if (!content.includes(marker)) {
+        return content;
+    }
+
+    // Only process TOC for blogs index page
+    if (!filePath.includes('/blogs/index.md')) {
+        return content;
+    }
+
+    try {
+        const blogsDir = './routes/blogs';
+        const blogPosts: Array<{
+            title: string;
+            date: string;
+            author: string;
+            tags: string[];
+            excerpt: string;
+            filename: string;
+            url: string;
+        }> = [];
+
+        // Scan blogs directory for markdown files (excluding index.md)
+        for await (const entry of Deno.readDir(blogsDir)) {
+            if (entry.isFile && entry.name.endsWith('.md') && entry.name !== 'index.md') {
+                const filePath = join(blogsDir, entry.name);
+                const content = await Deno.readTextFile(filePath);
+                const meta = await extractMetadata(content);
+
+                // Extract excerpt (first paragraph after frontmatter)
+                let excerpt = '';
+                if (content.startsWith('---')) {
+                    const endIndex = content.indexOf('---', 3);
+                    if (endIndex !== -1) {
+                        const markdownContent = content.substring(endIndex + 3).trim();
+                        const firstParagraph = markdownContent.split('\n\n')[0];
+                        // Remove markdown formatting for excerpt
+                        excerpt = firstParagraph
+                            .replace(/^#+\s*/, '') // Remove headers
+                            .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold
+                            .replace(/\*(.*?)\*/g, '$1') // Remove italic
+                            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links
+                            .substring(0, 150) + (firstParagraph.length > 150 ? '...' : '');
+                    }
+                }
+
+                const filename = basename(entry.name, '.md');
+                blogPosts.push({
+                    title: meta.title || filename.replace(/-/g, ' ').replace(/_/g, ' '),
+                    date: meta.date || '',
+                    author: meta.author || '',
+                    tags: meta.tags || [],
+                    excerpt,
+                    filename,
+                    url: `/blogs/${filename}`
+                });
+            }
+        }
+
+        // Sort by date (newest first)
+        blogPosts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        // Generate blog cards HTML
+        const blogCardsHTML = blogPosts.map(post => `<div class="blog-card">
+    <a href="${post.url}" class="blog-card-link-wrapper">
+        <div class="blog-card-header">
+            <h3 class="blog-card-title">${post.title}</h3>
+            <div class="blog-card-meta">
+                <span class="blog-card-date">${post.date}</span>
+                ${post.author ? `<span class="blog-card-author">by ${post.author}</span>` : ''}
+            </div>
+        </div>
+        ${post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ''}
+        ${post.tags.length > 0 ? `<div class="blog-card-tags">
+            ${post.tags.map(tag => `<span class="blog-card-tag">${tag}</span>`).join('')}
+        </div>` : ''}
+    </a>
+</div>`).join('');
+
+        // Replace marker with blog cards
+        return content.replace(marker, blogCardsHTML);
+
+    } catch (error) {
+        console.error('❌ Error processing TOC marker:', error);
+        return content.replace(marker, '<p>Error loading blog posts.</p>');
+    }
+}
+
 // Process Lua template if it exists
 async function processLuaTemplate(mdPath: string, content: string, meta: Record<string, any>): Promise<string> {
     const luaPath = './template.lua';
@@ -861,8 +968,11 @@ async function processMarkdownFile(filePath: string): Promise<PageData> {
     // Process Lua interpolations in the markdown content
     const interpolatedContent = await processLuaInterpolations(markdownContent);
 
-    // Parse markdown to HTML (after interpolation)
-    const htmlContent = parseMarkdown(interpolatedContent);
+    // Process TOC marker if present
+    const tocProcessedContent = await processTOCMarker(interpolatedContent, filePath);
+
+    // Parse markdown to HTML (after interpolation and TOC processing)
+    const htmlContent = parseMarkdown(tocProcessedContent);
 
     // Process with Lua template if available
     const processedContent = await processLuaTemplate(filePath, htmlContent, meta);
