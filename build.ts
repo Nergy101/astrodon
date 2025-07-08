@@ -44,19 +44,25 @@ function parseMarkdown(markdown: string): string {
 
 
 
-    // Images - ensure proper asset paths (process before links)
+    // Images - ensure proper asset paths with WebP fallback (process before links)
     markdown = markdown.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
         // Clean up src path
         let origSrc = src;
         if (!src.startsWith('http') && !src.startsWith('https') && !src.startsWith('/assets/')) {
             origSrc = `/assets/${src.replace(/^\.?\/?/, '')}`;
         }
-        // Only use the src for webp path, never alt
+
+        // Generate WebP path
         let webpSrc = origSrc;
         // Remove any query/hash from src for webp path
         webpSrc = webpSrc.replace(/[#?].*$/, '');
         webpSrc = webpSrc.replace(/\.[^.\/]+$/, '.webp');
-        return `<img src="${webpSrc}" alt="${alt}">`;
+
+        // Create picture element with WebP and original fallback
+        return `<picture>
+            <source srcset="${webpSrc}" type="image/webp">
+            <img src="${origSrc}" alt="${alt}">
+        </picture>`;
     });
 
     // Links (process after images to avoid conflicts)
@@ -415,7 +421,7 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
     <!-- Navigation Bar -->
     <nav class="navbar">
         <div class="navbar-container">
-            <a href="/" class="navbar-brand"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"> Nergy's Blog</a>
+            <a href="/" class="navbar-brand"><picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture> Nergy's Blog</a>
             <ul class="navbar-nav">
                 {{navigation}}
                 <li class="nav-item">
