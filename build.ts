@@ -1043,9 +1043,36 @@ async function extractMetadata(content: string): Promise<Record<string, any>> {
     return meta;
 }
 
+// Helper function to check if WebP logo exists
+function checkWebPLogoExists(): boolean {
+    try {
+        const webpPath = './dist/assets/nemic-logos/logo.webp';
+        const stat = Deno.statSync(webpPath);
+        return stat.isFile;
+    } catch {
+        return false;
+    }
+}
+
 // Generate HTML from template
 function generateHTML(content: string, meta: Record<string, any>, navigation: string, currentPath: string = ''): string {
     let html = DEFAULT_TEMPLATE;
+
+    // Check if WebP logo exists and replace the logo HTML accordingly
+    const webpLogoExists = checkWebPLogoExists();
+    if (webpLogoExists) {
+        // WebP exists, use picture element with WebP source
+        html = html.replace(
+            '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture>',
+            '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture>'
+        );
+    } else {
+        // WebP doesn't exist, use just the original image
+        html = html.replace(
+            '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture>',
+            '<img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo">'
+        );
+    }
 
     // Replace template variables
     html = html.replace('{{title}}', meta.title + ' | Nergy' || 'Nergy\'s Blog');
