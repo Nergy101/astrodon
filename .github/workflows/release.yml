@@ -1,0 +1,120 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      release_id: ${{ steps.create_release.outputs.id }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.4.0
+
+      - name: Cache Deno dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/deno
+            deno.lock
+          key: ${{ runner.os }}-deno-${{ hashFiles('**/deno.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-deno-
+
+      - name: Install dependencies
+        run: deno cache build.ts
+
+      - name: Build project
+        run: deno task build
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          # Get the previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # First release - get all commits
+            CHANGELOG=$(git log --pretty=format:"- %s" --no-merges)
+          else
+            # Get commits since last tag
+            CHANGELOG=$(git log --pretty=format:"- %s" --no-merges $PREVIOUS_TAG..HEAD)
+          fi
+
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          release_name: Release ${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## What's Changed
+
+            ${{ steps.release_notes.outputs.CHANGELOG }}
+
+            ## Build Information
+            - Built with Deno v2.4.0
+            - Build artifacts are attached below
+
+            ## Installation
+            Download the release artifacts and extract them to your desired location.
+          draft: false
+          prerelease: false
+
+      - name: Create release archive
+        run: |
+          cd dist
+          tar -czf ../astrodon-${{ steps.get_version.outputs.VERSION }}.tar.gz .
+          cd ..
+          zip -r astrodon-${{ steps.get_version.outputs.VERSION }}.zip dist/
+
+      - name: Upload Release Assets
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./astrodon-${{ steps.get_version.outputs.VERSION }}.tar.gz
+          asset_name: astrodon-${{ steps.get_version.outputs.VERSION }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Release Assets (ZIP)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./astrodon-${{ steps.get_version.outputs.VERSION }}.zip
+          asset_name: astrodon-${{ steps.get_version.outputs.VERSION }}.zip
+          asset_content_type: application/zip
+
+      - name: Build size report
+        run: |
+          echo "📊 Build size report for release ${{ steps.get_version.outputs.VERSION }}:"
+          du -sh dist/ || echo "dist/ directory not found"
+          find dist/ -type f -name "*.html" | wc -l | xargs echo "HTML files:"
+          find dist/ -type f -name "*.css" | wc -l | xargs echo "CSS files:"
+          find dist/ -type f -name "*.js" | wc -l | xargs echo "JS files:"
+          find dist/ -type f -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.webp" | wc -l | xargs echo "Image files:"
+          echo "Archive sizes:"
+          ls -lh astrodon-${{ steps.get_version.outputs.VERSION }}.*

@@ -41,7 +41,8 @@ jobs:
         with:
           name: dist-files
           path: dist/
-          retention-days: 7
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Build size report
         run: |
