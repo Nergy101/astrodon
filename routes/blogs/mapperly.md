@@ -1,5 +1,5 @@
 ---
-title: Nergy | Mapperly
+title: Mapperly
 date: 2024-12-21
 author: Christian / Nergy101
 tags: [C#, dotnet]

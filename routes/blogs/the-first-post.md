@@ -1,5 +1,5 @@
 ---
-title: Nergy | Welcome to my Blog
+title: Welcome to my Blog
 date: 2024-11-27
 author: Christian / Nergy101
 tags: [intro]

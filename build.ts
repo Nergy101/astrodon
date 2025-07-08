@@ -390,6 +390,7 @@ interface PageData {
 interface NavItem {
     title: string;
     url: string;
+    date?: string;
     children?: NavItem[];
 }
 
@@ -1024,7 +1025,7 @@ function generateHTML(content: string, meta: Record<string, any>, navigation: st
     let html = DEFAULT_TEMPLATE;
 
     // Replace template variables
-    html = html.replace('{{title}}', meta.title || 'My Blog');
+    html = html.replace('{{title}}', meta.title + ' | Nergy' || 'Nergy\'s Blog');
     html = html.replace('{{content}}', content);
     html = html.replace('{{navigation}}', navigation);
 
@@ -1069,14 +1070,48 @@ async function generateNavigation(): Promise<NavItem[]> {
                 // Scan subdirectory for markdown files
                 try {
                     for await (const subEntry of Deno.readDir(join(routesDir, folderName))) {
-                        if (subEntry.isFile && subEntry.name.endsWith('.md')) {
+                        if (subEntry.isFile && subEntry.name.endsWith('.md') && subEntry.name !== 'index.md') {
                             const fileName = basename(subEntry.name, '.md');
+                            const filePath = join(routesDir, folderName, subEntry.name);
+
+                            // Read file content to extract metadata
+                            let date = '';
+                            let title = fileName.charAt(0).toUpperCase() + fileName.slice(1).replace(/_/g, ' ').replace(/-/g, ' ');
+
+                            try {
+                                const content = await Deno.readTextFile(filePath);
+                                const meta = await extractMetadata(content);
+                                if (meta.date) {
+                                    date = meta.date;
+                                }
+                                if (meta.title) {
+                                    title = meta.title;
+                                }
+                            } catch (error) {
+                                console.log(`ℹ️  Could not read metadata from ${filePath}`);
+                            }
+
                             children.push({
-                                title: fileName.charAt(0).toUpperCase() + fileName.slice(1).replace(/_/g, ' ').replace(/-/g, ' '),
-                                url: `/${folderName}/${fileName}`
+                                title,
+                                url: `/${folderName}/${fileName}`,
+                                date
                             });
                         }
                     }
+
+                    // Sort children by date (newest first), then by title for items without dates
+                    children.sort((a, b) => {
+                        if (a.date && b.date) {
+                            return new Date(b.date).getTime() - new Date(a.date).getTime();
+                        } else if (a.date && !b.date) {
+                            return -1; // Items with dates come first
+                        } else if (!a.date && b.date) {
+                            return 1;
+                        } else {
+                            // If neither has a date, sort by title
+                            return a.title.localeCompare(b.title);
+                        }
+                    });
                 } catch (error) {
                     console.log(`ℹ️  Could not read subdirectory ${folderName}`);
                 }

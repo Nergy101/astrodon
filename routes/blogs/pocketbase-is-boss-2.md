@@ -1,5 +1,5 @@
 ---
-title: Nergy | PocketBase is Boss
+title: PocketBase is Boss
 date: 2024-12-10
 author: Christian / Nergy101
 tags: [Pocketbase]

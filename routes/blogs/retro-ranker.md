@@ -1,5 +1,5 @@
 ---
-title: Nergy | Retro Ranker
+title: Retro Ranker
 date: 2025-04-03
 author: Christian / Nergy101
 tags: [deno, retroranker, hobby]

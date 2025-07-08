@@ -158,6 +158,16 @@ deno task build:fast
 deno task serve:prod
 ```
 
+## Running on a Custom Port
+
+To start the server on a custom port (e.g., 5000), use the `--port` argument:
+
+```bash
+deno run --allow-read --allow-net --allow-run serve.ts --port=5000
+```
+
+This will start the development server at http://localhost:5000/
+
 ## ⚡ Performance Features
 
 ### Build Optimizations
