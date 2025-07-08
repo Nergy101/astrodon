@@ -11,8 +11,8 @@ Hello there! I'm **Christian** (also known as **Nergy101** online), and this is 
 
 For some of my other works, see:
 
-- [RetroRanker](https://retroranker.site)
-- [Portfolio](https://portfolio.nergy.space)
+- [👾 RetroRanker](https://retroranker.site)
+- [👨🏻‍💻 Portfolio](https://portfolio.nergy.space)
 
 ## What You'll Find Here
 
@@ -44,7 +44,7 @@ Feel free to:
 
 Reach me through:
 
-- [Github](https://github.com/Nergy101)
+- [My Github Profile](https://github.com/Nergy101)
 - [Mail](mailto:cdijk4@gmail.com)
 
 ## What's Next?
@@ -66,4 +66,4 @@ _Thanks for stopping by! I hope you find something here that sparks your curiosi
 
 **Happy exploring! 🚀**
 
-[About Me](/about) | [All Posts](/blogs)
+[📝 All Blog Posts](/blogs) | [👾 RetroRanker](https://retroranker.site) | [👨🏻‍💻 Portfolio](https://portfolio.nergy.space) | [🚀 Blog GitHub](https://github.com/Nergy101/astrodon)
