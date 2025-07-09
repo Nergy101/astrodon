@@ -439,18 +439,23 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
     <nav class="navbar">
         <div class="navbar-container">
             <a href="/" class="navbar-brand"><picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture><span class="navbar-brand-text">Nergy's Blog</span></a>
-            <ul class="navbar-nav">
+            <button class="mobile-menu-toggle" id="mobile-menu-toggle" aria-label="Toggle mobile menu">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <button class="nav-link theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">
+                <svg class="sun-icon" viewBox="0 0 24 24" style="display: none;">
+                    <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/>
+                </svg>
+                <svg class="moon-icon" viewBox="0 0 24 24">
+                    <path d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z"/>
+                </svg>
+            </button>
+            <ul class="navbar-nav" id="navbar-nav">
                 {{navigation}}
-                <li class="nav-item">
-                    <button class="nav-link theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">
-                        <svg class="sun-icon" viewBox="0 0 24 24" style="display: none;">
-                            <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/>
-                        </svg>
-                        <svg class="moon-icon" viewBox="0 0 24 24">
-                            <path d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z"/>
-                        </svg>
-                    </button>
-                </li>
             </ul>
         </div>
     </nav>
@@ -497,6 +502,67 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
         
         // Add event listener to theme toggle
         document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+
+        // Mobile navigation functionality
+        const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+        const navbarNav = document.getElementById('navbar-nav');
+        
+        if (mobileMenuToggle && navbarNav) {
+            mobileMenuToggle.addEventListener('click', function() {
+                const isActive = navbarNav.classList.contains('active');
+                
+                if (isActive) {
+                    navbarNav.classList.remove('active');
+                    mobileMenuToggle.classList.remove('active');
+                    document.body.classList.remove('mobile-menu-open');
+                    // Close all dropdowns
+                    navbarNav.querySelectorAll('.nav-dropdown').forEach(dd => dd.classList.remove('active'));
+                } else {
+                    navbarNav.classList.add('active');
+                    mobileMenuToggle.classList.add('active');
+                    document.body.classList.add('mobile-menu-open');
+                }
+            });
+
+            // Close mobile menu when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!navbarNav.contains(e.target) && !mobileMenuToggle.contains(e.target)) {
+                    navbarNav.classList.remove('active');
+                    mobileMenuToggle.classList.remove('active');
+                    document.body.classList.remove('mobile-menu-open');
+                    // Close all dropdowns
+                    navbarNav.querySelectorAll('.nav-dropdown').forEach(dd => dd.classList.remove('active'));
+                }
+            });
+
+            // Handle dropdown toggles on mobile
+            const dropdownToggles = navbarNav.querySelectorAll('.nav-dropdown-toggle');
+            dropdownToggles.forEach(toggle => {
+                toggle.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation(); // Prevent bubbling so it doesn't immediately reopen
+                    const dropdown = this.closest('.nav-dropdown');
+                    const isActive = dropdown.classList.contains('active');
+                    if (isActive) {
+                        dropdown.classList.remove('active');
+                    } else {
+                        dropdown.classList.add('active');
+                    }
+                });
+            });
+
+            // Close mobile menu when clicking on a link
+            const navLinks = navbarNav.querySelectorAll('.nav-link:not(.nav-dropdown-toggle)');
+            navLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    navbarNav.classList.remove('active');
+                    mobileMenuToggle.classList.remove('active');
+                    document.body.classList.remove('mobile-menu-open');
+                    // Close all dropdowns
+                    navbarNav.querySelectorAll('.nav-dropdown').forEach(dd => dd.classList.remove('active'));
+                });
+            });
+        }
 
         // Initialize syntax highlighting
         document.addEventListener('DOMContentLoaded', function() {
@@ -1069,7 +1135,7 @@ function generateHTML(content: string, meta: Record<string, any>, navigation: st
     } else {
         // WebP doesn't exist, use just the original image
         html = html.replace(
-            '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture><span class="navbar-brand-text">Nergy\'s Blog</span>',
+            '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"><span class="navbar-brand-text">Nergy\'s Blog</span>',
             '<img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"><span class="navbar-brand-text">Nergy\'s Blog</span>'
         );
     }
@@ -1194,7 +1260,7 @@ function generateNavigationHTML(navItems: NavItem[], currentPath: string = ''): 
 
             // Dropdown menu
             html += `<li class="nav-item nav-dropdown${activeClass}">`;
-            html += `<a href="${item.url}" class="nav-link nav-dropdown-toggle${isActive ? ' active' : ''}">${item.title}</a>`;
+            html += `<button type="button" class="nav-link nav-dropdown-toggle${isActive ? ' active' : ''}">${item.title}</button>`;
             html += `<div class="nav-dropdown-content">`;
             for (const child of item.children) {
                 const isChildActive = currentPath === child.url;
