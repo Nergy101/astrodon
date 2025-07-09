@@ -240,7 +240,7 @@ function parseMarkdown(markdown: string): string {
             html += '</tr>';
         }
         html += '</tbody></table>';
-        return html;
+        return `<div class="table-responsive">${html}</div>`;
     });
     // --- END TABLES HANDLING ---
 
@@ -438,7 +438,7 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
     <!-- Navigation Bar -->
     <nav class="navbar">
         <div class="navbar-container">
-            <a href="/" class="navbar-brand"><picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture> Nergy's Blog</a>
+            <a href="/" class="navbar-brand"><picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture><span class="navbar-brand-text">Nergy's Blog</span></a>
             <ul class="navbar-nav">
                 {{navigation}}
                 <li class="nav-item">
@@ -1069,8 +1069,8 @@ function generateHTML(content: string, meta: Record<string, any>, navigation: st
     } else {
         // WebP doesn't exist, use just the original image
         html = html.replace(
-            '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture>',
-            '<img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo">'
+            '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture><span class="navbar-brand-text">Nergy\'s Blog</span>',
+            '<img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"><span class="navbar-brand-text">Nergy\'s Blog</span>'
         );
     }
 
