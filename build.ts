@@ -88,6 +88,20 @@ function parseMarkdown(markdown: string): string {
         return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
     });
 
+    // --- CODE BLOCK HANDLING ---
+    // Store raw code blocks and insert uncommon delimiter placeholders
+    // This MUST happen BEFORE list processing to prevent YAML/JSON content from being converted to lists
+    const rawCodeBlocks: { lang: string, code: string }[] = [];
+    let rawCodeBlockIndex = 0;
+    markdown = markdown.replace(/```(\w+)?\n([\s\S]*?)```/g, function (match, language, code) {
+        rawCodeBlocks.push({
+            lang: language || 'plaintext',
+            code: code // preserve as-is
+        });
+        return `@@CODEBLOCK${rawCodeBlockIndex++}@@`;
+    });
+    // --- END CODE BLOCK HANDLING ---
+
     // --- NESTED LISTS HANDLING ---
     // We'll process the markdown line by line for lists, then join back for the rest of the regexes
     const lines = markdown.split(/\r?\n/);
@@ -136,19 +150,6 @@ function parseMarkdown(markdown: string): string {
     }
     markdown = htmlLines.join('\n');
     // --- END NESTED LISTS HANDLING ---
-
-    // --- CODE BLOCK HANDLING ---
-    // Store raw code blocks and insert uncommon delimiter placeholders
-    const rawCodeBlocks: { lang: string, code: string }[] = [];
-    let rawCodeBlockIndex = 0;
-    markdown = markdown.replace(/```(\w+)?\n([\s\S]*?)```/g, function (match, language, code) {
-        rawCodeBlocks.push({
-            lang: language || 'plaintext',
-            code: code // preserve as-is
-        });
-        return `@@CODEBLOCK${rawCodeBlockIndex++}@@`;
-    });
-    // --- END CODE BLOCK HANDLING ---
 
     // --- DEFINITION LISTS HANDLING ---
     // Process definition lists: term on one line, : definition on next line
