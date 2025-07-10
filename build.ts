@@ -875,21 +875,25 @@ export async function processLuaInterpolations(content: string): Promise<string>
     return content;
 }
 
-// Process TOC marker and replace with blog cards
+// Process TOC marker and replace with dynamic content cards
 async function processTOCMarker(content: string, filePath: string): Promise<string> {
     const marker = '{{routes:toc}}';
     if (!content.includes(marker)) {
         return content;
     }
 
-    // Only process TOC for blogs index page
-    if (!filePath.includes('/blogs/index.md')) {
+    // Extract directory from file path
+    const relativePath = filePath.replace(/^\.?\/?routes\//, '');
+    const directory = dirname(relativePath);
+
+    // Only process TOC for index.md files in subdirectories
+    if (!filePath.endsWith('/index.md') || directory === '.') {
         return content;
     }
 
     try {
-        const blogsDir = './routes/blogs';
-        const blogPosts: Array<{
+        const targetDir = `./routes/${directory}`;
+        const posts: Array<{
             title: string;
             date: string;
             author: string;
@@ -899,11 +903,11 @@ async function processTOCMarker(content: string, filePath: string): Promise<stri
             url: string;
         }> = [];
 
-        // Scan blogs directory for markdown files (excluding index.md)
-        for await (const entry of Deno.readDir(blogsDir)) {
+        // Scan target directory for markdown files (excluding index.md)
+        for await (const entry of Deno.readDir(targetDir)) {
             if (entry.isFile && entry.name.endsWith('.md') && entry.name !== 'index.md') {
-                const filePath = join(blogsDir, entry.name);
-                const content = await Deno.readTextFile(filePath);
+                const entryPath = join(targetDir, entry.name);
+                const content = await Deno.readTextFile(entryPath);
                 const meta = await extractMetadata(content);
 
                 // Extract excerpt (first paragraph after frontmatter)
@@ -924,23 +928,38 @@ async function processTOCMarker(content: string, filePath: string): Promise<stri
                 }
 
                 const filename = basename(entry.name, '.md');
-                blogPosts.push({
+                posts.push({
                     title: meta.title || filename.replace(/-/g, ' ').replace(/_/g, ' '),
                     date: meta.date || '',
                     author: meta.author || '',
                     tags: meta.tags || [],
                     excerpt,
                     filename,
-                    url: `/blogs/${filename}`
+                    url: `/${directory}/${filename}`
                 });
             }
         }
 
-        // Sort by date (newest first)
-        blogPosts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        // Sort by date (newest first) if dates are available, otherwise by title
+        posts.sort((a, b) => {
+            if (a.date && b.date) {
+                return new Date(b.date).getTime() - new Date(a.date).getTime();
+            } else if (a.date && !b.date) {
+                return -1; // Items with dates come first
+            } else if (!a.date && b.date) {
+                return 1;
+            } else {
+                // If neither has a date, sort by title
+                return a.title.localeCompare(b.title);
+            }
+        });
 
-        // Generate blog cards HTML
-        const blogCardsHTML = blogPosts.map(post => `<div class="blog-card">
+        // Generate cards HTML based on directory type
+        let cardsHTML = '';
+
+        if (directory === 'blogs') {
+            // Blog-style cards with metadata
+            cardsHTML = posts.map(post => `<div class="blog-card">
     <a href="${post.url}" class="blog-card-link-wrapper">
         <div class="blog-card-header">
             <h3 class="blog-card-title">${post.title}</h3>
@@ -955,13 +974,31 @@ async function processTOCMarker(content: string, filePath: string): Promise<stri
         </div>` : ''}
     </a>
 </div>`).join('');
+        } else {
+            // Generic content cards for other directories
+            cardsHTML = posts.map(post => `<div class="content-card">
+    <a href="${post.url}" class="content-card-link-wrapper">
+        <div class="content-card-header">
+            <h3 class="content-card-title">${post.title}</h3>
+            ${post.date ? `<div class="content-card-meta">
+                <span class="content-card-date">${post.date}</span>
+                ${post.author ? `<span class="content-card-author">by ${post.author}</span>` : ''}
+            </div>` : ''}
+        </div>
+        ${post.excerpt ? `<p class="content-card-excerpt">${post.excerpt}</p>` : ''}
+        ${post.tags.length > 0 ? `<div class="content-card-tags">
+            ${post.tags.map(tag => `<span class="content-card-tag">${tag}</span>`).join('')}
+        </div>` : ''}
+    </a>
+</div>`).join('');
+        }
 
-        // Replace marker with blog cards
-        return content.replace(marker, blogCardsHTML);
+        // Replace marker with generated cards
+        return content.replace(marker, cardsHTML);
 
     } catch (error) {
-        console.error('❌ Error processing TOC marker:', error);
-        return content.replace(marker, '<p>Error loading blog posts.</p>');
+        console.error(`❌ Error processing TOC marker for ${filePath}:`, error);
+        return content.replace(marker, `<p>Error loading content from ${directory}.</p>`);
     }
 }
 
