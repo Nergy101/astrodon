@@ -472,6 +472,13 @@ a:hover {
   color: white;
 }
 
+.nav-dropdown-separator {
+  height: 1px;
+  background-color: var(--border);
+  margin: var(--xs) 0;
+  opacity: 0.6;
+}
+
 .nav-dropdown-toggle::after {
   content: '▼';
   transform: rotate(90deg);
@@ -1607,6 +1614,11 @@ textarea:focus {
 [data-theme='dark'] .nav-dropdown-item.active:hover {
   background: var(--primary-dark);
   color: white;
+}
+
+[data-theme='dark'] .nav-dropdown-separator {
+  background-color: var(--border);
+  opacity: 0.4;
 }
 
 [data-theme='dark'] .theme-toggle:hover {

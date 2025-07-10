@@ -1262,6 +1262,15 @@ function generateNavigationHTML(navItems: NavItem[], currentPath: string = ''): 
             html += `<li class="nav-item nav-dropdown${activeClass}">`;
             html += `<button type="button" class="nav-link nav-dropdown-toggle${isActive ? ' active' : ''}">${item.title}</button>`;
             html += `<div class="nav-dropdown-content">`;
+
+            // Add "see all" item at the top of the dropdown
+            const isSeeAllActive = currentPath === item.url;
+            html += `<a href="${item.url}" class="nav-dropdown-item${isSeeAllActive ? ' active' : ''}">See All ${item.title}</a>`;
+
+            // Add separator
+            html += `<div class="nav-dropdown-separator"></div>`;
+
+            // Add child items
             for (const child of item.children) {
                 const isChildActive = currentPath === child.url;
                 html += `<a href="${child.url}" class="nav-dropdown-item${isChildActive ? ' active' : ''}">${child.title}</a>`;
