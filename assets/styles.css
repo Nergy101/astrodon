@@ -632,8 +632,11 @@ blockquote blockquote {
   font-size: 1.25rem;
 }
 
-/* Tags */
-.tag {
+/* Tags - only for metadata and specific tag elements, not for HTML tags in code */
+.metadata .tag,
+.blog-card-tag,
+.content-card-tag,
+.tech-tag {
   display: inline-block;
   background: var(--primary);
   color: white;
@@ -645,7 +648,10 @@ blockquote blockquote {
   transition: background-color var(--transition-fast);
 }
 
-.tag:hover {
+.metadata .tag:hover,
+.blog-card-tag:hover,
+.content-card-tag:hover,
+.tech-tag:hover {
   background: var(--primary-dark);
   color: white;
 }
@@ -1106,21 +1112,6 @@ hr {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
-}
-
-.metadata .tag {
-  background: var(--primary);
-  color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 1rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  transition: background-color var(--transition-fast);
-}
-
-.metadata .tag:hover {
-  background: var(--primary-dark);
-  color: white;
 }
 
 .navbar-logo {

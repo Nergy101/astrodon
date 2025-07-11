@@ -102,6 +102,15 @@ function parseMarkdown(markdown: string): string {
     });
     // --- END CODE BLOCK HANDLING ---
 
+    // Wrap standalone HTML blocks (e.g., <script>...</script>) in <pre><code> unless already in a code block or script block placeholder
+    markdown = markdown.replace(/(^|\n)(<script[\s\S]*?<\/script>)/g, (match, p1, p2) => {
+        // Only wrap if not already inside a code block or script block placeholder
+        if (!/^@@CODEBLOCK\d+@@$/.test(p2.trim()) && !/^__SCRIPT_BLOCK_\d+__$/.test(p2.trim())) {
+            return `${p1}<pre><code class=\"language-html\">${p2.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`;
+        }
+        return match;
+    });
+
     // --- NESTED LISTS HANDLING ---
     // We'll process the markdown line by line for lists, then join back for the rest of the regexes
     const lines = markdown.split(/\r?\n/);
@@ -297,14 +306,24 @@ function parseMarkdown(markdown: string): string {
     });
     // --- END FOOTNOTES HANDLING ---
 
-    // Restore script blocks BEFORE other processing
-    markdown = markdown.replace(/__SCRIPT_BLOCK_(\d+)__/g, (match, index) => {
-        return scriptBlocks[parseInt(index)] || match;
-    });
+    // Restore script blocks AFTER all other processing to prevent interference
+    // (This will be done at the end of the function)
 
     // Process the rest of the markdown
     markdown = markdown
         // Headers - allow for leading whitespace and add anchor links
+        .replace(/^\s*###### (.*$)/gim, (match, title) => {
+            const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            return `<h6 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h6>`;
+        })
+        .replace(/^\s*##### (.*$)/gim, (match, title) => {
+            const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            return `<h5 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h5>`;
+        })
+        .replace(/^\s*#### (.*$)/gim, (match, title) => {
+            const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            return `<h4 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h4>`;
+        })
         .replace(/^\s*### (.*$)/gim, (match, title) => {
             const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
             return `<h3 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h3>`;
@@ -400,6 +419,16 @@ function parseMarkdown(markdown: string): string {
             </div>
             <pre><code class="language-${language}">${sanitizedCode}</code></pre>
         </div>`;
+    });
+
+    // Restore script blocks AFTER all other processing to prevent interference
+    markdown = markdown.replace(/__SCRIPT_BLOCK_(\d+)__/g, (match, index) => {
+        return scriptBlocks[parseInt(index)] || match;
+    });
+
+    // Handle custom HTML code blocks: {{htmlcode}} ... {{/htmlcode}} - AFTER all other processing
+    markdown = markdown.replace(/\{\{htmlcode\}\}([\s\S]*?)\{\{\/htmlcode\}\}/g, (match, code) => {
+        return `<pre><code class=\"language-html\">${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`;
     });
 
     return markdown;
