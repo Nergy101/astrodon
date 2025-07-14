@@ -196,12 +196,12 @@ a {
   color: var(--primary);
   text-decoration: none;
   transition: color var(--transition-fast);
-  border-bottom: 1px solid transparent;
+  /* border-bottom: 1px solid transparent; */
 }
 
 a:hover {
   color: var(--primary-dark);
-  border-bottom-color: var(--primary);
+  /* border-bottom-color: var(--primary); */
 }
 
 /* ===== LAYOUT ===== */
@@ -1634,7 +1634,8 @@ button:focus,
 input:focus,
 textarea:focus {
   outline: 2px solid var(--primary);
-  outline-offset: 2px;
+  outline-offset: 0.5rem;
+  border-radius: 0.25rem;
 }
 
 @media (prefers-contrast: high) {
