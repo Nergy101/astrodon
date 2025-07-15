@@ -32,6 +32,10 @@ I've been exploring some interesting topics lately:
 - Learning new frameworks and tools
 - Documenting my journey as a developer
 
+## 🚀 Featured Demo
+
+Check out the **[Hybrid Lua Demo](/hybrid-demo)** to see how this site combines static build-time caching with dynamic runtime Lua execution for optimal performance!
+
 ## Let's Connect
 
 I believe in the power of community and shared knowledge. Whether you're a fellow developer, a curious mind, or just someone who stumbled upon this blog, I'd love to hear from you!

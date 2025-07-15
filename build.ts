@@ -1212,7 +1212,7 @@ function generateHTML(content: string, meta: Record<string, any>, navigation: st
     html = html.replace('{{content}}', content);
     html = html.replace('{{navigation}}', navigation);
 
-    // Add Lua WASM runtime script and Prism.js scripts
+    // Add Lua WASM runtime script, Runtime Lua utility, and Prism.js scripts
     const additionalScripts = `
     <script type="application/lua" data-module="render-time">
 -- Simple render time module for backward compatibility
@@ -1220,6 +1220,9 @@ local os = require("os")
 local format = "iso"
 return os.date("!%Y-%m-%dT%H:%M:%SZ")
     </script>
+
+    <!-- Dynamic content loader for server-side Lua execution -->
+    <script defer src="/assets/dynamic-content.js"></script>
     <!-- Prism.js for syntax highlighting -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>

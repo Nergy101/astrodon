@@ -13,7 +13,7 @@ function main(format)
     elseif format == "time" then
         return os.date("%H:%M:%S")
     elseif format == "friendly" then
-        return os.date("%B %d, %Y at %I:%M %p")
+        return os.date("%B %d, %Y at %I:%M:%S %p")
     elseif format == "unix" then
         return tostring(os.time())
     else

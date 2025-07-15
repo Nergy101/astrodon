@@ -134,19 +134,15 @@ await serve(
             }
         }
 
-        // API endpoint for current UTC time from Lua
-        if (path === "/lua-scripts/time") {
+        // API endpoint for current time with format parameter
+        if (path.startsWith("/lua-scripts/time/")) {
             try {
-                const process = new Deno.Command("lua", {
-                    args: ["api/get_time.lua"],
-                    stdout: "piped",
-                    stderr: "piped",
-                });
-                const { code, stdout, stderr } = await process.output();
-                if (code !== 0) {
-                    const error = new TextDecoder().decode(stderr);
-                    const response = new Response(JSON.stringify({ error }), {
-                        status: 500,
+                const format = path.split("/").pop() || "iso";
+                const allowedFormats = ["iso", "local", "utc", "date", "time", "datetime", "friendly"];
+
+                if (!allowedFormats.includes(format)) {
+                    const response = new Response(JSON.stringify({ error: `Invalid format: ${format}` }), {
+                        status: 400,
                         headers: {
                             "content-type": "application/json",
                             "cache-control": "no-cache, no-store, must-revalidate",
@@ -154,18 +150,27 @@ await serve(
                     });
                     return response;
                 }
-                const time = new TextDecoder().decode(stdout).trim();
-                const response = new Response(JSON.stringify({ time }), {
+
+                // Read and execute the current_time.lua script
+                const luaScript = await Deno.readTextFile("./lua-scripts/current_time.lua");
+
+                // Use WASMOON for secure execution
+                const factory = new LuaFactory();
+                const lua = await factory.createEngine();
+
+                // Execute the script and call main function with format parameter
+                const result = await lua.doString(luaScript + `\nreturn main("${format}")`);
+                const response = new Response(JSON.stringify({ time: result }), {
                     status: 200,
                     headers: {
                         "content-type": "application/json",
-                        "cache-control": "public, max-age=300", // 5 minutes for API
+                        "cache-control": "no-cache, no-store, must-revalidate", // No cache for dynamic time
                     },
                 });
-                setCachedResponse(path, response);
                 return response;
             } catch (err) {
-                const response = new Response(JSON.stringify({ error: String(err) }), {
+                console.error("Time API error:", err);
+                const response = new Response(JSON.stringify({ error: "Time generation failed" }), {
                     status: 500,
                     headers: {
                         "content-type": "application/json",
@@ -176,14 +181,16 @@ await serve(
             }
         }
 
+
+
         // API endpoint for executing Lua modules (SECURE VERSION)
         if (path === "/lua-scripts/lua-execute" && req.method === "POST") {
             try {
                 const body = await req.json();
                 const { module, context } = body;
 
-                // SECURITY: Only allow specific modules
-                const allowedModules = ["render-time"];
+                // SECURITY: Only allow specific modules that correspond to existing Lua scripts
+                const allowedModules = ["render-time", "current-time", "counter", "random-quote", "time-module"];
                 if (!allowedModules.includes(module)) {
                     const response = new Response(JSON.stringify({ error: `Module '${module}' not allowed` }), {
                         status: 403,
@@ -196,10 +203,10 @@ await serve(
                 }
 
                 // SECURITY: Validate and sanitize context
-                const sanitizedContext: { format?: string; timezone?: string } = {};
+                const sanitizedContext: { format?: string; timezone?: string; prefix?: string; count?: number } = {};
                 if (context && typeof context === 'object') {
-                    // Only allow specific context properties for render-time
-                    if (module === "render-time") {
+                    // Allow specific context properties for each module
+                    if (module === "render-time" || module === "current-time") {
                         const allowedFormats = ["iso", "local", "utc", "date", "time", "datetime", "friendly"];
                         const allowedTimezones = ["utc", "local"];
 
@@ -209,46 +216,46 @@ await serve(
                         if (context.timezone && allowedTimezones.includes(context.timezone)) {
                             sanitizedContext.timezone = context.timezone;
                         }
+                    } else if (module === "counter") {
+                        if (context.prefix && typeof context.prefix === 'string' && context.prefix.length <= 50) {
+                            sanitizedContext.prefix = context.prefix;
+                        }
+                        if (context.count && typeof context.count === 'number' && context.count >= 1 && context.count <= 100) {
+                            sanitizedContext.count = context.count;
+                        }
+                    } else if (module === "time-module") {
+                        // time-module doesn't need additional context validation
+                        // it provides predefined functions
                     }
                 }
 
-                // SECURITY: Use predefined, safe Lua scripts only
+                // SECURITY: Use existing Lua scripts from lua-scripts directory
                 let luaScript = "";
+                let scriptPath = "";
 
-                if (module === "render-time") {
+                if (module === "render-time" || module === "current-time") {
+                    scriptPath = "./lua-scripts/current_time.lua";
                     const format = sanitizedContext.format || "iso";
-                    const timezone = sanitizedContext.timezone || "utc";
-
-                    // SECURITY: Use parameterized script with validation
-                    luaScript = `
-local os = require("os")
-local format = "${format}"
-local timezone = "${timezone}"
-
--- SECURITY: Validate format parameter
-local validFormats = {iso = true, local = true, utc = true, date = true, time = true, datetime = true, friendly = true}
-if not validFormats[format] then
-    format = "iso"
-end
-
-if format == "iso" then
-    return os.date("!%Y-%m-%dT%H:%M:%SZ")
-elseif format == "local" then
-    return os.date("%Y-%m-%d %H:%M:%S")
-elseif format == "utc" then
-    return os.date("!%Y-%m-%d %H:%M:%S")
-elseif format == "date" then
-    return os.date("%Y-%m-%d")
-elseif format == "time" then
-    return os.date("%H:%M:%S")
-elseif format == "datetime" then
-    return os.date("%Y-%m-%d %H:%M:%S")
-elseif format == "friendly" then
-    return "Just now"
-else
-    return os.date("!%Y-%m-%dT%H:%M:%SZ")
-end
-                `;
+                    luaScript = await Deno.readTextFile(scriptPath);
+                    // Call the main function with the format parameter
+                    luaScript += `\nreturn main("${format}")`;
+                } else if (module === "counter") {
+                    scriptPath = "./lua-scripts/counter.lua";
+                    const prefix = sanitizedContext.prefix || "Item";
+                    const count = sanitizedContext.count || 3;
+                    luaScript = await Deno.readTextFile(scriptPath);
+                    // Call the main function with parameters
+                    luaScript += `\nreturn main("${prefix}", ${count})`;
+                } else if (module === "random-quote") {
+                    scriptPath = "./lua-scripts/random_quote.lua";
+                    luaScript = await Deno.readTextFile(scriptPath);
+                    // Call the main function
+                    luaScript += `\nreturn main()`;
+                } else if (module === "time-module") {
+                    scriptPath = "./lua-scripts/time_module.lua";
+                    luaScript = await Deno.readTextFile(scriptPath);
+                    // Return the module functions
+                    luaScript += `\nreturn { get_current_time = get_current_time, get_timestamp = get_timestamp, get_time_components = get_time_components }`;
                 }
 
                 // Use WASMOON to execute Lua code securely in memory
@@ -287,7 +294,7 @@ end
                     status: 200,
                     headers: {
                         "content-type": "application/json",
-                        "cache-control": "public, max-age=300", // 5 minutes for API
+                        "cache-control": "no-cache, no-store, must-revalidate", // No cache for dynamic content
                     },
                 });
                 return response;
