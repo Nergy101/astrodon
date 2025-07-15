@@ -9,6 +9,16 @@ tags: [C#, dotnet, FluentResults]
 
 As a programmer, you've surely thrown an exception/error or two. For this blog, I will call them exceptions. Throwing exceptions is perfectly normal, and it is often encouraged to "Fail fast!". For the longest time, I agreed. While writing APIs I would throw exceptions, catch them through some middleware, and return with proper response codes or details. However, sometimes I would miss some information, not "know" the details of that specific exception anymore, or the location where the exception occurred would be hard to trace back.
 
+## Table of Contents
+
+- [Fluent Results: A Better Approach to Error Handling](#fluent-results-a-better-approach-to-error-handling)
+  - [Table of Contents](#table-of-contents)
+  - [The Rust Inspiration](#the-rust-inspiration)
+  - [RFC 7807 - Problem Details for HTTP APIs](#rfc-7807---problem-details-for-http-apis)
+  - [Enter FluentResults](#enter-fluentresults)
+  - [Exception Mapping](#exception-mapping)
+  - [Conclusion](#conclusion)
+
 ## The Rust Inspiration
 
 However, while I was fiddling with Rust, I was intrigued by their Result-based approach. The Result-based approach preaches that...

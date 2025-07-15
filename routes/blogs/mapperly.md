@@ -17,6 +17,14 @@ The new kid is called [Mapperly](https://github.com/riok/mapperly), and it is a 
 - provide a better developer experience (DX)
 - not hard to learn, as it's mainly just attributes
 
+## Table of Contents
+
+- [Introduction](#introduction)
+- [Simple Mapping Example](#simple-mapping-example)
+- [Advanced Mapping with Nested Models](#advanced-mapping-with-nested-models)
+- [Property Mapping and Value Generation](#property-mapping-and-value-generation)
+- [Conclusion](#conclusion)
+
 ---
 
 Let's have a look at how to use **Mapperly**, first let me sketch an example of two simple models that we want to map, with only some minor differences for now:

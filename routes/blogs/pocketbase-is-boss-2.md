@@ -18,6 +18,14 @@ Just to name a few:
 
 Today we will dive a bit into PocketBase and why I have been using it to build [Tovedem](https://tovedem.nergy.space), rather rapidly and carefree.
 
+## Table of Contents
+
+- [Introduction](#introduction)
+- [What is PocketBase?](#what-is-pocketbase)
+- [Getting Started](#getting-started)
+- [Basic JavaScript SDK Usage](#basic-javascript-sdk-usage)
+- [Conclusion](#conclusion)
+
 First off, what **is** PocketBase?
 
 [PocketBase](https://pocketbase.io) is a backend service in a single file. It's being built as a framework in Go with a SQLite database backing. As said it is available to use as a framework, but not only that. It's also available as a database + backend application that encompasses most of the basic development work. Think of authentication (O-Auth), managing SQL tables with different relationships, APIs on this data, and real-time feeds.
