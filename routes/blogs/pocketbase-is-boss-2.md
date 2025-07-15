@@ -20,11 +20,16 @@ Today we will dive a bit into PocketBase and why I have been using it to build [
 
 ## Table of Contents
 
-- [Introduction](#introduction)
-- [What is PocketBase?](#what-is-pocketbase)
-- [Getting Started](#getting-started)
-- [Basic JavaScript SDK Usage](#basic-javascript-sdk-usage)
-- [Conclusion](#conclusion)
+- [PocketBase: The Single-File Backend That's Actually Boss](#pocketbase-the-single-file-backend-thats-actually-boss)
+  - [Table of Contents](#table-of-contents)
+  - [Introduction](#introduction)
+  - [Getting Started](#getting-started)
+  - [Basic JavaScript SDK Usage](#basic-javascript-sdk-usage)
+  - [Conclusion](#conclusion)
+
+---
+
+## Introduction
 
 First off, what **is** PocketBase?
 
@@ -33,6 +38,8 @@ First off, what **is** PocketBase?
 Another thing;
 
 The documentation is GREAT! While extending PocketBase functionality with Javascript, the documentation is up-to-date and very searchable. One example is the recent update to version 0.23. This had quite a few breaking changes, which were well-documented and easy to follow.
+
+## Getting Started
 
 Let's have a quick look at how to get started with PocketBase.
 

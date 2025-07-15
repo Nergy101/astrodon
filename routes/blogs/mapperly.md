@@ -19,13 +19,17 @@ The new kid is called [Mapperly](https://github.com/riok/mapperly), and it is a 
 
 ## Table of Contents
 
-- [Introduction](#introduction)
-- [Simple Mapping Example](#simple-mapping-example)
-- [Advanced Mapping with Nested Models](#advanced-mapping-with-nested-models)
-- [Property Mapping and Value Generation](#property-mapping-and-value-generation)
-- [Conclusion](#conclusion)
+- [Mapperly: Better mappers](#mapperly-better-mappers)
+  - [Table of Contents](#table-of-contents)
+  - [Introduction](#introduction)
+  - [Simple Mapping Example](#simple-mapping-example)
+  - [Advanced Mapping with Nested Models](#advanced-mapping-with-nested-models)
+  - [Property Mapping and Value Generation](#property-mapping-and-value-generation)
+  - [Conclusion](#conclusion)
 
 ---
+
+## Introduction
 
 Let's have a look at how to use **Mapperly**, first let me sketch an example of two simple models that we want to map, with only some minor differences for now:
 
@@ -61,6 +65,8 @@ public class DragonModel
 }
 ```
 
+## Simple Mapping Example
+
 Our mapper to map between both models would look like:
 
 ```csharp
@@ -93,6 +99,8 @@ public partial class DragonMapper
 As you can see, it generated an enum-to-string for the Element and array-to-array method, all perfectly viewable and readable code.
 
 But this is just the beginning.
+
+## Advanced Mapping with Nested Models
 
 Next up let's try a more complicated mapping, showcasing how to map nested models, ignoring "leftover" properties and generating a value for an otherwise empty mapped property:
 
@@ -156,6 +164,10 @@ public partial class DragonMapper
 
 Easy enough, right? With the Use-notation, we can use any method in the same class. This comes in very handy for generating values, using other Mapperly-mapping methods to map other models, etc.
 
+## Property Mapping and Value Generation
+
 Like I said, in his process, Mapperly is telling us exactly what properties we are forgetting to map. This has saved me a few times already from needing to debug huge mappers to see what was missing from my configurations in other libraries or manual mappings.
+
+## Conclusion
 
 Anyways, I hope you have learned something today, and got curious enough about Mapperly to use it in your next app or project!

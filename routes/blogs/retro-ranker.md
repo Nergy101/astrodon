@@ -28,6 +28,8 @@ When I started building [Retro Ranker](https://retroranker.site) — a platform 
     - [Integrating PocketBase](#integrating-pocketbase)
   - [Conclusion](#conclusion)
 
+---
+
 ## Introduction
 
 The decision to use Deno Fresh was driven by several key factors. First and foremost, I wanted a framework that would allow me to build a fast, SEO-friendly website without the complexity of traditional server-side rendering solutions. Deno Fresh's zero-configuration approach and built-in TypeScript support made it an attractive choice.

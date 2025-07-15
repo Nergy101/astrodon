@@ -647,7 +647,9 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
 
         // Header anchor functionality
         document.addEventListener('click', function(e) {
-            if (e.target.classList.contains('header-anchor')) {
+            // Handle both header-anchor class and regular anchor links to headers
+            if (e.target.classList.contains('header-anchor') || 
+                (e.target.tagName === 'A' && e.target.getAttribute('href') && e.target.getAttribute('href').startsWith('#'))) {
                 e.preventDefault();
                 const href = e.target.getAttribute('href');
                 if (!href) return;
@@ -671,21 +673,23 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
                     // Update URL without page reload
                     history.pushState(null, null, href);
                     
-                    // Copy URL to clipboard
-                    const url = window.location.origin + window.location.pathname + href;
-                    navigator.clipboard.writeText(url).then(() => {
-                        // Show a brief visual feedback
-                        const originalText = e.target.textContent;
-                        e.target.textContent = '✓ Copied!';
-                        e.target.style.color = '#10b981';
-                        
-                        setTimeout(() => {
-                            e.target.textContent = originalText;
-                            e.target.style.color = '';
-                        }, 1500);
-                    }).catch(err => {
-                        console.log('Could not copy URL to clipboard:', err);
-                    });
+                    // Only copy URL to clipboard for header-anchor class (not for TOC links)
+                    if (e.target.classList.contains('header-anchor')) {
+                        const url = window.location.origin + window.location.pathname + href;
+                        navigator.clipboard.writeText(url).then(() => {
+                            // Show a brief visual feedback
+                            const originalText = e.target.textContent;
+                            e.target.textContent = '✓ Copied!';
+                            e.target.style.color = '#10b981';
+                            
+                            setTimeout(() => {
+                                e.target.textContent = originalText;
+                                e.target.style.color = '';
+                            }, 1500);
+                        }).catch(err => {
+                            console.log('Could not copy URL to clipboard:', err);
+                        });
+                    }
                 }
             }
         });

@@ -19,6 +19,8 @@ As a programmer, you've surely thrown an exception/error or two. For this blog, 
   - [Exception Mapping](#exception-mapping)
   - [Conclusion](#conclusion)
 
+---
+
 ## The Rust Inspiration
 
 However, while I was fiddling with Rust, I was intrigued by their Result-based approach. The Result-based approach preaches that...
