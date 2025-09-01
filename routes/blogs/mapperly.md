@@ -1,173 +1,250 @@
 ---
-title: Mapperly
-date: 2024-12-21
+title: Mapperly vs AutoMapper
+date: 2025-09-01
 author: Christian / Nergy101
-tags: [C#, dotnet]
+tags: [C#, .NET, mapping, source-generators, BenchmarkDotNet]
 ---
 
-# Mapperly: Better mappers
+### Mapperly: Better mappers and an alternative to AutoMapper
 
-At some point in your career, you will be manually mapping model A to model B, model C to model D, etc., until you get really, and I mean really, fed up with it. Then, you want to try and make it easier, faster, and better for the next models you will have to map.
+At some point you will map model A to B, C to D, and so on, until you’re thoroughly tired of it. Most .NET developers reach for **AutoMapper**—a mature, feature-rich library. There’s also **Mapperly**: a free, open-source alternative that uses Roslyn source generators to emit plain C# mapping code at compile time.
 
-Most people will know about **AutoMapper**, the de facto library for creating dotnet mappers. However, there's a new kid on the block with some sweet promises. AutoMapper along with others and manual mappings can get messy. It can be hard to pinpoint what properties you forgot to map, or which mappings you're missing.
+What that buys you:
 
-The new kid is called [Mapperly](https://github.com/riok/mapperly), and it is a library for creating mappers with the help of **source generation** which makes it:
+- **Performance**: zero reflection in hot paths; simple IL the JIT can optimize well
+- **Safety**: compile-time diagnostics for missing/ambiguous mappings (e.g., RMG020)
+- **DX**: you can read the generated code when you need insight or a debugger step-through
 
-- faster (uses zero reflection)
-- provide a better developer experience (DX)
-- not hard to learn, as it's mainly just attributes
+AutoMapper remains excellent, with a huge ecosystem and powerful features. As of v15, AutoMapper requires [a paid commercial license for larger companies](https://automapper.io/#pricing); see the pricing page for details. Mapperly remains free and open source.
 
-## Table of Contents
+<img src="/assets/gifs/Show Me The Money GIF.gif" alt="gif">
 
-- [Mapperly: Better mappers](#mapperly-better-mappers)
-  - [Table of Contents](#table-of-contents)
-  - [Introduction](#introduction)
-  - [Simple Mapping Example](#simple-mapping-example)
-  - [Advanced Mapping with Nested Models](#advanced-mapping-with-nested-models)
-  - [Property Mapping and Value Generation](#property-mapping-and-value-generation)
-  - [Conclusion](#conclusion)
+And actually, I fully support Jimmy Bogard for his decision.
+However it's also a great opportunity for other libraries to take the stage for anyone that doesn't want to spend money.
 
 ---
 
-## Introduction
+## Models used in this post
 
-Let's have a look at how to use **Mapperly**, first let me sketch an example of two simple models that we want to map, with only some minor differences for now:
-
-Model A:
+For the examples and benchmarks in this repo, we map a domain `Dragon` to a `DragonDto` with nested objects and a collection:
 
 ```csharp
-public class Dragon
+public sealed class Dragon
 {
     public string Name { get; set; } = string.Empty;
-    public int Age { get; set; }
-    public Element Element { get; set; }
-    public string[] Powers { get; set; } = Array.Empty<string>();
-}
-
-public enum Element
-{
-    Fire,
-    Ice,
-    Lightning,
-    Earth
+    public string Color { get; set; } = string.Empty;
+    public int AgeYears { get; set; }
+    public double SizeMeters { get; set; }
+    public Rider? Rider { get; set; }
+    public Lair? Lair { get; set; }
+    public List<Treasure> Hoard { get; set; } = new();
 }
 ```
 
-Model B:
-
 ```csharp
-public class DragonModel
+public sealed class DragonDto
 {
-    public string Name { get; set; } = string.Empty;
-    public int Age { get; set; }
-    public string Element { get; set; } = string.Empty;
-    public string[] Powers { get; set; } = Array.Empty<string>();
+    public string DisplayName { get; set; } = string.Empty;
+    public string PrimaryColor { get; set; } = string.Empty;
+    public string Age { get; set; } = string.Empty;
+    public int LengthCentimeters { get; set; }
+    public bool IsAncient { get; set; }
+    public RiderDto? Pilot { get; set; }
+    public LairDto? Hideout { get; set; }
+    public List<TreasureDto> HoardItems { get; set; } = new();
 }
 ```
 
-## Simple Mapping Example
+---
 
-Our mapper to map between both models would look like:
+## Code comparison: AutoMapper vs Mapperly
 
-```csharp
-[Mapper]
-public partial class DragonMapper
-{
-    public partial DragonModel Map(Dragon dragon);
-    public partial Dragon Map(DragonModel dragonModel);
-}
-```
-
-Here the methods are both named Map, but you could be more explicit if you want to be. Isn't this nice and concise? But of course, this is a very straightforward example. Take note of the* partial* keywords which is because the actual mapping code is being generated for us by Mapperly. This is perfectly readable code by the way, here is a snippet of what Mapperly generates (not the full file):
+### AutoMapper configuration
 
 ```csharp
-public partial class DragonMapper
+public sealed class DragonsProfile : Profile
 {
-    public DragonModel Map(Dragon dragon)
+    public DragonsProfile()
     {
-        return new DragonModel
-        {
-            Name = dragon.Name,
-            Age = dragon.Age,
-            Element = dragon.Element.ToString(),
-            Powers = dragon.Powers
-        };
+        CreateMap<Treasure, TreasureDto>()
+            .ForMember(d => d.ItemName, o => o.MapFrom(s => s.Name))
+            .ForMember(d => d.Category, o => o.MapFrom(s => s.Type.ToString()))
+            .ForMember(d => d.ValueUsd, o => o.MapFrom(s => (double)s.EstimatedValue))
+            .ForMember(d => d.WeightGrams, o => o.MapFrom(s => (int)System.Math.Round(s.WeightKg * 1000)));
+
+        CreateMap<Lair, LairDto>()
+            .ForMember(d => d.LairName, o => o.MapFrom(s => s.Name))
+            .ForMember(d => d.Region, o => o.MapFrom(s => s.Location))
+            .ForMember(d => d.Capacity, o => o.MapFrom(s => (long)s.Capacity))
+            .ForMember(d => d.Hidden, o => o.MapFrom(s => s.IsHidden));
+
+        CreateMap<Rider, RiderDto>()
+            .ForMember(d => d.FullName, o => o.MapFrom(s => s.FirstName + " " + s.LastName))
+            .ForMember(d => d.Experience, o => o.MapFrom(s => s.ExperienceLevel <= 3 ? "Novice" : (s.ExperienceLevel <= 6 ? "Skilled" : "Expert")))
+            .ForMember(d => d.City, o => o.MapFrom(s => s.HomeTown));
+
+        CreateMap<Dragon, DragonDto>()
+            .ForMember(d => d.DisplayName, o => o.MapFrom(s => s.Name))
+            .ForMember(d => d.PrimaryColor, o => o.MapFrom(s => s.Color))
+            .ForMember(d => d.Age, o => o.MapFrom(s => s.AgeYears.ToString()))
+            .ForMember(d => d.IsAncient, o => o.MapFrom(s => s.AgeYears >= 1000))
+            .ForMember(d => d.LengthCentimeters, o => o.MapFrom(s => (int)System.Math.Round(s.SizeMeters * 100)))
+            .ForMember(d => d.Pilot, o => o.MapFrom(s => s.Rider))
+            .ForMember(d => d.Hideout, o => o.MapFrom(s => s.Lair))
+            .ForMember(d => d.HoardItems, o => o.MapFrom(s => s.Hoard));
     }
 }
 ```
 
-As you can see, it generated an enum-to-string for the Element and array-to-array method, all perfectly viewable and readable code.
-
-But this is just the beginning.
-
-## Advanced Mapping with Nested Models
-
-Next up let's try a more complicated mapping, showcasing how to map nested models, ignoring "leftover" properties and generating a value for an otherwise empty mapped property:
-
-Model C includes a new ID field and Origin-type property:
-
-```csharp
-public class Dragon
-{
-    public Guid Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public int Age { get; set; }
-    public Element Element { get; set; }
-    public string[] Powers { get; set; } = Array.Empty<string>();
-    public Origin Origin { get; set; } = new();
-}
-
-public class Origin
-{
-    public string Realm { get; set; } = string.Empty;
-    public string Dimension { get; set; } = string.Empty;
-}
-```
-
-Model D ignores the Id field and doesn't use the nested Origin property:
-
-```csharp
-public class DragonModel
-{
-    public string Name { get; set; } = string.Empty;
-    public int Age { get; set; }
-    public string Element { get; set; } = string.Empty;
-    public string[] Powers { get; set; } = Array.Empty<string>();
-    public string Realm { get; set; } = string.Empty;
-    public string Dimension { get; set; } = string.Empty;
-}
-```
-
-As soon as I added the "Id" property on the Dragon, the mapper code gave this warning in my IDE:
-
-> RMG020: The member Id on the mapping source type DragonMapperly.Dragon is not mapped to any member on the mapping target type DragonMapperly.DragonModel
-
-And the same kind of thing happened for every other mis(sed)-configuration. For this example let's generate a new Guid when mapping from the DragonModel to a Dragon, but ignore (leave out) the Id field when mapping from Dragon to DragonModel. Also, we are flat-mapping the Dragon.Origin to the DragonModel. This is actually* the default*, but the attribute makes it more clear for this example. We are also unflatting from DragonModel to Dragon.Origin. This is **not the default**, so we need those two MapProperty attributes.
-
-Adjusting for these changes, our mapper now looks like this:
+### Mapperly mapper with source generation
 
 ```csharp
 [Mapper]
-public partial class DragonMapper
+public partial class DragonsMapper
 {
-    [MapProperty(nameof(Dragon.Origin.Realm), nameof(DragonModel.Realm))]
-    [MapProperty(nameof(Dragon.Origin.Dimension), nameof(DragonModel.Dimension))]
-    public partial DragonModel Map(Dragon dragon);
+    [MapProperty(nameof(Dragon.Name), nameof(DragonDto.DisplayName))]
+    [MapProperty(nameof(Dragon.Color), nameof(DragonDto.PrimaryColor))]
+    [MapProperty(nameof(Dragon.AgeYears), nameof(DragonDto.Age))]
+    [MapProperty(nameof(Dragon.AgeYears), nameof(DragonDto.IsAncient))]
+    [MapProperty(nameof(Dragon.SizeMeters), nameof(DragonDto.LengthCentimeters))]
+    [MapProperty(nameof(Dragon.Rider), nameof(DragonDto.Pilot))]
+    [MapProperty(nameof(Dragon.Lair), nameof(DragonDto.Hideout))]
+    [MapProperty(nameof(Dragon.Hoard), nameof(DragonDto.HoardItems))]
+    public partial DragonDto MapDragon(Dragon source);
 
-    [MapProperty(nameof(DragonModel.Realm), nameof(Dragon.Origin.Realm))]
-    [MapProperty(nameof(DragonModel.Dimension), nameof(Dragon.Origin.Dimension))]
-    public partial Dragon Map(DragonModel dragonModel);
+    public partial List<DragonDto> MapDragons(List<Dragon> source);
 
-    private Guid UseNewGuid() => Guid.NewGuid();
+    // Custom helpers re-used by the generated mapper
+    [UserMapping]
+    private static RiderDto MapRider(Rider source) => new()
+    {
+        FullName = string.Concat(source.FirstName, " ", source.LastName),
+        Experience = MapExperience(source.ExperienceLevel),
+        City = source.HomeTown
+    };
+
+    [UserMapping]
+    private static LairDto MapLair(Lair source) => new()
+    {
+        LairName = source.Name,
+        Region = source.Location,
+        Capacity = source.Capacity,
+        Hidden = source.IsHidden
+    };
+
+    [MapProperty(nameof(Treasure.Name), nameof(TreasureDto.ItemName))]
+    [MapProperty(nameof(Treasure.Type), nameof(TreasureDto.Category))]
+    [MapProperty(nameof(Treasure.EstimatedValue), nameof(TreasureDto.ValueUsd))]
+    [MapProperty(nameof(Treasure.WeightKg), nameof(TreasureDto.WeightGrams))]
+    public partial TreasureDto MapTreasure(Treasure source);
+
+    [UserMapping]
+    private static string MapExperience(int level) => level switch
+    {
+        <= 3 => "Novice",
+        <= 6 => "Skilled",
+        _ => "Expert"
+    };
 }
 ```
 
-Easy enough, right? With the Use-notation, we can use any method in the same class. This comes in very handy for generating values, using other Mapperly-mapping methods to map other models, etc.
+With Mapperly you keep concise, intention-revealing declarations and let the generator produce the concrete mapping code. You can also open the generated C# to review exactly what runs.
 
-## Property Mapping and Value Generation
+<img src="/assets/gifs/James Franco GIF.gif" alt="gif">
 
-Like I said, in his process, Mapperly is telling us exactly what properties we are forgetting to map. This has saved me a few times already from needing to debug huge mappers to see what was missing from my configurations in other libraries or manual mappings.
+---
+
+## Benchmarks: throughput and allocations
+
+I used BenchmarkDotNet to compare both approaches on a Mac M2, .NET 9, mapping single items and collections of 1k, 10k, 100k, and 1M dragons.
+
+- **Single item**: AutoMapper was ~1.37–1.84× slower than Mapperly and allocated ~1.16× more. Average was about 1.45× slower.
+- **Collections**: AutoMapper was ~1.10–1.37× slower and allocated ~1.18× more
+
+| Method                |  Entities | Time Ratio | Alloc Ratio |
+| --------------------- | --------: | ---------: | ----------: |
+| Mapperly Collection   |     1.000 |       1.00 |        1.00 |
+| AutoMapper Collection |     1.000 |       1.14 |        1.17 |
+| Mapperly Collection   |    10.000 |       1.00 |        1.00 |
+| AutoMapper Collection |    10.000 |       1.37 |        1.18 |
+| Mapperly Collection   |   100.000 |       1.00 |        1.00 |
+| AutoMapper Collection |   100.000 |       1.10 |        1.18 |
+| Mapperly Collection   | 1.000.000 |       1.00 |        1.00 |
+| AutoMapper Collection | 1.000.000 |       1.26 |        1.17 |
+| Mapperly Single       |         1 |       1.00 |        1.00 |
+| AutoMapper Single     |         1 |       1.45 |        1.16 |
+
+---
+
+## Advanced and nested mapping
+
+The sample shows nested mapping for `Rider` and `Lair`, and a collection of `Treasure`. Mapperly lets you:
+
+- **Flatten/unflatten** via `[MapProperty]` between different shapes
+- **Compose** generated code with your own `[UserMapping]` helpers
+- **Get diagnostics** when you forget a property (e.g., missing `MapProperty`), early at compile time
+
+You could, for example, convert units (`SizeMeters` → `LengthCentimeters`), compute flags (`IsAncient`), and merge names (`FullName`) — all with small helpers that remain easy to test.
+
+## Compile-time diagnostics
+
+If we were to add a `CreatedAt` datetime field to the dragon like so:
+
+```csharp
+public sealed class Dragon
+{
+    public string Name { get; set; } = string.Empty;
+    public string Color { get; set; } = string.Empty;
+    public int AgeYears { get; set; }
+    public double SizeMeters { get; set; }
+    public Rider? Rider { get; set; }
+    public Lair? Lair { get; set; }
+    public List<Treasure> Hoard { get; set; } = new();
+
+    public DateTime CreatedAt { get; set; }
+}
+```
+
+our compiler will tell us:
+
+```log
+The member CreatedAt on the mapping source type
+Benchmarks.Models.DomainModels.Dragon
+is not mapped to any member on the mapping
+target type Benchmarks.Models.DtoModels.DragonDto
+```
+
+And that's great, because it allows us to **know for sure** we didn't miss any properties to map,
+and we have _at least_ specified what to do with every property.
+
+---
+
+## When to choose which
+
+- **Mapperly**: prefer for performance-sensitive or large-batch mappings; when you want readable generated code and compile-time feedback. Also the licence is more permissive and its fully free to use, even for large companies.
+- **AutoMapper**: prefer when you need advanced projection features (EF/Linq etc.), a broad ecosystem, or you already have significant profiles configured.
+
+As ever, benchmark with your own models and sizes.
+
+---
+
+## Resources
+
+- Mapperly GitHub: `https://github.com/riok/mapperly`
+- Mapperly documentation: `https://mapperly.riok.app/`
+- AutoMapper website & pricing: `https://automapper.io/#pricing`
+- BenchmarkDotNet: `https://benchmarkdotnet.org/`
 
 ## Conclusion
 
-Anyways, I hope you have learned something today, and got curious enough about Mapperly to use it in your next app or project!
+Mapperly’s source-generated approach delivers simple, fast mapping code and early diagnostics.
+
+In short:
+
+<img src="/assets/gifs/Joe Biden GIF by GIPHY News.gif" alt="gif">
+
+So go give it a try, and I am sure you won't regret it!
+
+---
+
+Want to stay updated? Bookmark this page or follow me on [GitHub](https://github.com/Nergy101)

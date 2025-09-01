@@ -93,9 +93,10 @@ function parseMarkdown(markdown: string): string {
     // This MUST happen BEFORE list processing to prevent YAML/JSON content from being converted to lists
     const rawCodeBlocks: { lang: string, code: string }[] = [];
     let rawCodeBlockIndex = 0;
-    markdown = markdown.replace(/```(\w+)?\n([\s\S]*?)```/g, function (match, language, code) {
+    // Support CRLF and optional/trailing spaces after language token
+    markdown = markdown.replace(/```([^\r\n]+)?\r?\n([\s\S]*?)```/g, function (match, language, code) {
         rawCodeBlocks.push({
-            lang: language || 'plaintext',
+            lang: (language ? String(language).trim() : 'plaintext'),
             code: code // preserve as-is
         });
         return `@@CODEBLOCK${rawCodeBlockIndex++}@@`;
@@ -409,7 +410,23 @@ function parseMarkdown(markdown: string): string {
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#x27;');
 
-        const language = block.lang.toLowerCase();
+        // Normalize common language identifiers for Prism
+        const rawLang = block.lang.toLowerCase().trim();
+        const language = ((): string => {
+            switch (rawLang) {
+                case 'cs':
+                case 'c#':
+                    return 'csharp';
+                case 'ts':
+                    return 'typescript';
+                case 'js':
+                    return 'javascript';
+                case 'yml':
+                    return 'yaml';
+                default:
+                    return rawLang || 'plaintext';
+            }
+        })();
         const uniqueId = `code-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
         return `<div class="code-block-container" data-language="${language}" id="${uniqueId}">
@@ -1472,6 +1489,22 @@ async function optimizeImages(): Promise<void> {
         for (const { fullPath, relativePath } of imageFiles) {
             try {
                 const outputPath = join(distAssetsDir, relativePath.replace(/\.[^.]+$/, '.webp'));
+
+                // Skip if already optimized and up-to-date in dist
+                try {
+                    const [srcStat, destStat] = await Promise.all([
+                        Deno.stat(fullPath),
+                        Deno.stat(outputPath)
+                    ]);
+                    const srcMtime = srcStat.mtime ? srcStat.mtime.getTime() : 0;
+                    const destMtime = destStat.mtime ? destStat.mtime.getTime() : 0;
+                    if (destMtime >= srcMtime) {
+                        console.log(`⏭️  Skipping ${relativePath} (cached)`);
+                        continue;
+                    }
+                } catch {
+                    // If dest doesn't exist, proceed with optimization
+                }
 
                 // Ensure output directory exists
                 await ensureDir(dirname(outputPath));
