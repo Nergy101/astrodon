@@ -8,12 +8,17 @@ See my blog for example usage: https://github.com/Nergy101/blog
 
 1. Install Deno 1.40+ and (optionally) Lua 5.1+
 
-2. Add import map
+2. Create `deno.json` with JSR import + tasks (Blog-style)
 
 ```json
 {
+  "tasks": {
+    "build": "deno run --allow-read --allow-write --allow-run build.ts",
+    "serve": "deno run --allow-read --allow-net --allow-run serve.ts",
+    "dev": "deno task build && deno task serve"
+  },
   "imports": {
-    "astrodon": "https://raw.githubusercontent.com/Nergy101/astrodon/main/mod.ts"
+    "astrodon": "jsr:@nergy101/astrodon@0.1.6"
   }
 }
 ```
@@ -27,6 +32,8 @@ import { build } from 'astrodon';
 await build({
   contentDir: new URL('./routes', import.meta.url).pathname,
   outDir: new URL('./dist', import.meta.url).pathname,
+  assetsDir: new URL('./assets', import.meta.url).pathname, // optional
+  componentsDir: new URL('./components', import.meta.url).pathname, // optional
 });
 ```
 
@@ -45,8 +52,8 @@ await serve({
 5. Run
 
 ```bash
-deno run -A build.ts
-deno run -A serve.ts
+deno task build
+deno task serve
 # open http://localhost:8000
 ```
 
@@ -55,6 +62,7 @@ deno run -A serve.ts
 ```
 my-site/
 ├─ routes/               # Markdown content
+├─ components/           # HTML partials (header, footer, nav, etc.)
 ├─ lua-scripts/          # Optional Lua scripts
 ├─ assets/               # Static files
 ├─ dist/                 # Build output
@@ -100,6 +108,23 @@ function main(label, n)
 end
 ```
 
+## Runtime Lua APIs (dev server)
+
+When using the dev server, you can also fetch dynamic values at runtime (as used in the Blog):
+
+- `GET /lua-scripts/time/:format` → `{ "time": string }`
+  - **format**: `iso | local | utc | date | time | datetime | friendly`
+- `POST /lua-scripts/lua-execute` → `{ "result": string }`
+  - body: `{ "module": "render-time|current-time|counter|random-quote|time-module", "context": { ... } }`
+
+Example (client):
+
+```js
+const res = await fetch('/lua-scripts/time/friendly');
+const { time } = await res.json();
+document.querySelector('#dynamic-time').textContent = time;
+```
+
 ## Optional image optimization
 
 Install `optimizt` once to convert images to WebP during build:
@@ -112,8 +137,9 @@ Install `optimizt` once to convert images to WebP during build:
 ## Commands
 
 ```bash
-deno run -A build.ts          # Build
-deno run -A serve.ts          # Serve locally (use --port=5000 to change)
+deno task build               # Build
+deno task serve               # Serve locally
+# pass flags to scripts: deno task serve -- --port=5000
 ```
 
 ## Configuration (minimal)
@@ -126,6 +152,12 @@ Use `optimization.config.json` if you want simple tuning:
   "server": { "cache": { "enabled": true, "ttl": 300000 } }
 }
 ```
+
+## Custom components
+
+Within the /Components folder you can create custom templates for:
+
+- navbar.html
 
 ## Troubleshooting
 
