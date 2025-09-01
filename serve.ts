@@ -1,8 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-net --allow-run
 
-import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
-import { serveDir } from "https://deno.land/std@0.208.0/http/file_server.ts";
-import { extname, join } from "https://deno.land/std@0.208.0/path/mod.ts";
+import { serveDir } from "jsr:@std/http/file-server";
+import { extname, join } from "jsr:@std/path";
 import { LuaFactory } from "npm:wasmoon@1.16.0";
 
 // Get port from command line arguments or use default
@@ -73,7 +72,7 @@ console.log(`🔄 Auto fallback to index.html enabled`);
 console.log(`⚡ API caching enabled (5min TTL), normal routes disabled`);
 
 // Function to generate tree view of dist directory
-async function generateTreeView(dirPath: string, prefix: string = "", isLast: boolean = true): Promise<string[]> {
+async function generateTreeView(dirPath: string, prefix: string = "", _isLast: boolean = true): Promise<string[]> {
     const tree: string[] = [];
     try {
         const entries = [];
@@ -123,8 +122,8 @@ try {
 }
 console.log(""); // Empty line for better readability
 
-await serve(
-    async (req) => {
+Deno.serve({ port },
+    async (req: Request) => {
         const url = new URL(req.url);
         const path = url.pathname;
 
@@ -353,7 +352,7 @@ await serve(
                 setCachedResponse(path, modifiedResponse);
                 return modifiedResponse;
             }
-        } catch (error) {
+        } catch (_error) {
             // Continue to fallback logic
         }
 
@@ -365,7 +364,7 @@ await serve(
             const response = compressResponse(indexContent, "text/html; charset=utf-8", false);
             setCachedResponse(path, response);
             return response;
-        } catch (error) {
+        } catch (_error) {
             // If index.html doesn't exist, return a proper 404
             const response = new Response("404 - Page not found", {
                 status: 404,
@@ -376,6 +375,5 @@ await serve(
             });
             return response;
         }
-    },
-    { port }
-); 
+    }
+);

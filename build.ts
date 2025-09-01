@@ -1,8 +1,8 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run
 
-import { ensureDir, copy } from "https://deno.land/std@0.208.0/fs/mod.ts";
-import { join, extname, basename, dirname, relative, fromFileUrl } from "https://deno.land/std@0.208.0/path/mod.ts";
-import { crypto } from "https://deno.land/std@0.208.0/crypto/mod.ts";
+import { ensureDir, copy } from "jsr:@std/fs";
+import { join, extname, basename, dirname, relative, fromFileUrl } from "jsr:@std/path";
+import { crypto } from "jsr:@std/crypto";
 
 // Cache for processed files to avoid reprocessing unchanged content
 const fileCache = new Map<string, { hash: string; content: string }>();
