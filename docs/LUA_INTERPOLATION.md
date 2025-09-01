@@ -1,10 +1,14 @@
 # Lua Interpolation System
 
-This document explains how to use the Lua interpolation system in your markdown files for dynamic content generation.
+This document explains how to use the Lua interpolation system in your markdown
+files for dynamic content generation.
 
 ## Overview
 
-The Lua interpolation system allows you to embed the results of Lua script execution directly into your markdown content during the build process. This enables dynamic content generation similar to static site generators like Jekyll or Hugo, but with the power and flexibility of Lua scripting.
+The Lua interpolation system allows you to embed the results of Lua script
+execution directly into your markdown content during the build process. This
+enables dynamic content generation similar to static site generators like Jekyll
+or Hugo, but with the power and flexibility of Lua scripting.
 
 ## Syntax
 
@@ -21,8 +25,8 @@ The current time is: {{lua:current_time}}
 Pass parameters to Lua scripts using `{{lua:script_name:param1,param2}}`:
 
 ```markdown
-Counter: {{lua:counter:Item,5}}
-Time in friendly format: {{lua:current_time:friendly}}
+Counter: {{lua:counter:Item,5}} Time in friendly format:
+{{lua:current_time:friendly}}
 ```
 
 ## Available Scripts
@@ -168,16 +172,19 @@ end
 **Usage:**
 
 ```markdown
-{{lua:weather:New York,detailed}}
-{{lua:weather:London}}
+{{lua:weather:New York,detailed}} {{lua:weather:London}}
 ```
 
 ## How It Works
 
-1. **Build Time Processing**: During the build process, the system scans markdown files for `{{lua:...}}` patterns
-2. **Script Execution**: For each pattern found, the corresponding Lua script is executed using WASMOON
-3. **Output Replacement**: The script's output replaces the interpolation pattern
-4. **Markdown Processing**: The processed content continues through the normal markdown-to-HTML pipeline
+1. **Build Time Processing**: During the build process, the system scans
+   markdown files for `{{lua:...}}` patterns
+2. **Script Execution**: For each pattern found, the corresponding Lua script is
+   executed using WASMOON
+3. **Output Replacement**: The script's output replaces the interpolation
+   pattern
+4. **Markdown Processing**: The processed content continues through the normal
+   markdown-to-HTML pipeline
 5. **Caching**: Results are cached for performance optimization
 
 ## Performance Optimizations
@@ -191,7 +198,8 @@ end
 
 ### Best Practices for Performance
 
-1. **Keep scripts lightweight**: Avoid heavy computations in interpolation scripts
+1. **Keep scripts lightweight**: Avoid heavy computations in interpolation
+   scripts
 2. **Use caching**: Leverage the built-in caching for expensive operations
 3. **Validate parameters**: Always check and sanitize input parameters
 4. **Handle errors gracefully**: Provide fallback values for missing data
@@ -207,7 +215,8 @@ end
 
 ## Error Handling
 
-If a script fails or doesn't exist, the interpolation will be replaced with an error message:
+If a script fails or doesn't exist, the interpolation will be replaced with an
+error message:
 
 - `[Lua Script Not Found: script_name]` - Script file doesn't exist
 - `[Lua Error: script_name]` - Script execution failed
@@ -219,8 +228,8 @@ If a script fails or doesn't exist, the interpolation will be replaced with an e
 
 ```markdown
 ---
-title: 'My Blog Post'
-date: '2024-12-19'
+title: "My Blog Post"
+date: "2024-12-19"
 ---
 
 # Welcome to My Blog

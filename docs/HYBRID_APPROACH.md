@@ -1,12 +1,14 @@
 # Hybrid Lua Approach Documentation
 
-This document explains how to use the hybrid approach that combines build-time caching with runtime Lua execution for optimal performance and user experience.
+This document explains how to use the hybrid approach that combines build-time
+caching with runtime Lua execution for optimal performance and user experience.
 
 ## Overview
 
 The hybrid approach provides the best of both worlds:
 
-- **Static Content (Build-time)**: Processed once during build, cached for performance
+- **Static Content (Build-time)**: Processed once during build, cached for
+  performance
 - **Dynamic Content (Runtime)**: Executed on every page request, always fresh
 
 ## 🎯 When to Use Each Approach
@@ -34,9 +36,8 @@ The hybrid approach provides the best of both worlds:
 Use the standard Lua interpolation syntax in your markdown:
 
 ```markdown
-**Build time:** {{lua:current_time:friendly}}
-**Static counter:** {{lua:counter:Step,5}}
-**Static quote:** {{lua:random_quote}}
+**Build time:** {{lua:current_time:friendly}} **Static counter:**
+{{lua:counter:Step,5}} **Static quote:** {{lua:random_quote}}
 ```
 
 ### Available Scripts
@@ -77,21 +78,21 @@ Use the Fetch API to call server endpoints:
 
 ```javascript
 // Get current time
-fetch('/lua-scripts/time/friendly')
-  .then(response => response.json())
-  .then(data => console.log(data.time));
+fetch("/lua-scripts/time/friendly")
+  .then((response) => response.json())
+  .then((data) => console.log(data.time));
 
 // Execute any module
-fetch('/lua-scripts/lua-execute', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+fetch("/lua-scripts/lua-execute", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    module: 'random-quote',
+    module: "random-quote",
     context: {},
   }),
 })
-  .then(response => response.json())
-  .then(data => console.log(data.result));
+  .then((response) => response.json())
+  .then((data) => console.log(data.result));
 ```
 
 ### Method 3: Server-side Integration
@@ -100,7 +101,7 @@ Integrate with other server-side services:
 
 ```javascript
 // Example: Node.js/Deno server integration
-const response = await fetch('http://localhost:8000/lua-scripts/time/iso');
+const response = await fetch("http://localhost:8000/lua-scripts/time/iso");
 const data = await response.json();
 console.log(data.time);
 ```
@@ -175,9 +176,9 @@ curl -X POST http://localhost:8000/lua-scripts/lua-execute \
 
 ```javascript
 // Example: Express.js middleware
-app.get('/api/time/:format', async (req, res) => {
+app.get("/api/time/:format", async (req, res) => {
   const response = await fetch(
-    `http://localhost:8000/lua-scripts/time/${req.params.format}`
+    `http://localhost:8000/lua-scripts/time/${req.params.format}`,
   );
   const data = await response.json();
   res.json(data);
@@ -186,12 +187,12 @@ app.get('/api/time/:format', async (req, res) => {
 // Example: Next.js API route
 export default async function handler(req, res) {
   const response = await fetch(
-    'http://localhost:8000/lua-scripts/lua-execute',
+    "http://localhost:8000/lua-scripts/lua-execute",
     {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body),
-    }
+    },
   );
   const data = await response.json();
   res.json(data);
@@ -216,31 +217,31 @@ curl -X POST http://localhost:8000/lua-scripts/lua-execute \
 
 ```javascript
 // Example: Scheduled tasks with cron
-import cron from 'node-cron';
+import cron from "node-cron";
 
 // Update time every minute
-cron.schedule('* * * * *', async () => {
-  const response = await fetch('http://localhost:8000/lua-scripts/time/iso');
+cron.schedule("* * * * *", async () => {
+  const response = await fetch("http://localhost:8000/lua-scripts/time/iso");
   const data = await response.json();
-  console.log('Current time:', data.time);
+  console.log("Current time:", data.time);
 });
 
 // Example: WebSocket integration
-io.on('connection', socket => {
+io.on("connection", (socket) => {
   setInterval(async () => {
     const response = await fetch(
-      'http://localhost:8000/lua-scripts/lua-execute',
+      "http://localhost:8000/lua-scripts/lua-execute",
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          module: 'random-quote',
+          module: "random-quote",
           context: {},
         }),
-      }
+      },
     );
     const data = await response.json();
-    socket.emit('quote', data.result);
+    socket.emit("quote", data.result);
   }, 30000);
 });
 ```
@@ -268,8 +269,8 @@ The system includes comprehensive error handling:
 
 ```javascript
 // Errors are caught and displayed gracefully
-lua.execute('invalid-module').catch(error => {
-  console.error('Lua execution failed:', error);
+lua.execute("invalid-module").catch((error) => {
+  console.error("Lua execution failed:", error);
   // Element will show "[Error: Module not allowed]"
 });
 ```
@@ -335,9 +336,13 @@ Monitor API calls in your application:
 
 ## 🚀 Next Steps
 
-1. **Explore the Demo**: Visit `/hybrid-demo` to see the server-side approach in action
-2. **Test the APIs**: Use curl or your preferred API client to experiment with the endpoints
+1. **Explore the Demo**: Visit `/hybrid-demo` to see the server-side approach in
+   action
+2. **Test the APIs**: Use curl or your preferred API client to experiment with
+   the endpoints
 3. **Create Custom Modules**: Add new Lua modules to the server
-4. **Optimize Performance**: Adjust caching and server configuration based on your needs
+4. **Optimize Performance**: Adjust caching and server configuration based on
+   your needs
 
-The server-side approach provides clean separation of concerns with secure execution and optimal performance.
+The server-side approach provides clean separation of concerns with secure
+execution and optimal performance.

@@ -1,6 +1,8 @@
 # Performance Optimizations
 
-This document outlines the comprehensive performance optimizations implemented in the Deno Lua project, including build optimizations, server performance, image optimization, and monitoring tools.
+This document outlines the comprehensive performance optimizations implemented
+in the Deno Lua project, including build optimizations, server performance,
+image optimization, and monitoring tools.
 
 ## 🚀 Build Performance Optimizations
 
@@ -14,7 +16,8 @@ This document outlines the comprehensive performance optimizations implemented i
 
 ### 2. Parallel File Processing
 
-- **Implementation**: Uses `Promise.all()` to process markdown files concurrently
+- **Implementation**: Uses `Promise.all()` to process markdown files
+  concurrently
 - **Benefit**: Reduces total build time by processing files in parallel
 - **Concurrency**: Configurable (default: 4 concurrent operations)
 - **Impact**: 2-4x faster builds depending on file count and system resources
@@ -106,7 +109,8 @@ This document outlines the comprehensive performance optimizations implemented i
 
 ### 1. WebP Conversion
 
-- **Implementation**: Automatic conversion of images to WebP format using `optimizt`
+- **Implementation**: Automatic conversion of images to WebP format using
+  `optimizt`
 - **Supported Formats**: PNG, JPG, JPEG, GIF, BMP, TIFF
 - **Quality**: 80% (configurable)
 - **Fallback**: Original images are preserved for browser compatibility

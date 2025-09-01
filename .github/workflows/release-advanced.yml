@@ -3,10 +3,10 @@ name: Advanced Release
 on:
   push:
     tags:
-      - 'v*'
-      - 'v*-alpha*'
-      - 'v*-beta*'
-      - 'v*-rc*'
+      - "v*"
+      - "v*-alpha*"
+      - "v*-beta*"
+      - "v*-rc*"
 
 jobs:
   build-and-release:

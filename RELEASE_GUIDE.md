@@ -1,6 +1,7 @@
 # Release Guide
 
-This guide explains how to create releases for the Astrodon project using the GitHub Actions workflows.
+This guide explains how to create releases for the Astrodon project using the
+GitHub Actions workflows.
 
 ## Release Workflows
 
@@ -15,9 +16,11 @@ We have two release workflows available:
 ### 2. Advanced Release (`release-advanced.yml`)
 
 - **Trigger:** Push tags matching `v*`, `v*-alpha*`, `v*-beta*`, `v*-rc*`
-- **Purpose:** Feature-rich releases with categorized changelogs and multiple archive formats
+- **Purpose:** Feature-rich releases with categorized changelogs and multiple
+  archive formats
 - **Assets:** Full TAR.GZ, ZIP, and minimal TAR.GZ archives
-- **Features:** Automatic release type detection, categorized changelogs, build reports
+- **Features:** Automatic release type detection, categorized changelogs, build
+  reports
 
 ## Creating a Release
 
@@ -90,7 +93,8 @@ git push origin v1.0.0-rc.1
 
 ## Changelog Generation
 
-The advanced release workflow automatically generates changelogs by categorizing commits:
+The advanced release workflow automatically generates changelogs by categorizing
+commits:
 
 - **🚨 Breaking Changes:** Commits containing "breaking" or "major"
 - **✨ New Features:** Commits containing "feat", "feature", or "add"
@@ -154,11 +158,14 @@ Each release includes:
 
 ## Best Practices
 
-1. **Test Before Release:** Always test your build locally before creating a release
+1. **Test Before Release:** Always test your build locally before creating a
+   release
 2. **Use Semantic Versioning:** Follow semver.org guidelines for version numbers
-3. **Write Clear Commit Messages:** Use descriptive commit messages for better changelogs
+3. **Write Clear Commit Messages:** Use descriptive commit messages for better
+   changelogs
 4. **Review Release Notes:** Check the generated release notes before publishing
-5. **Use Pre-releases:** Use alpha/beta/rc tags for testing before final releases
+5. **Use Pre-releases:** Use alpha/beta/rc tags for testing before final
+   releases
 
 ## Workflow Configuration
 

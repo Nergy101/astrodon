@@ -1,6 +1,7 @@
 # Lua Scripts Reference
 
-This document provides a comprehensive reference for all available Lua scripts in the `lua-scripts/` directory.
+This document provides a comprehensive reference for all available Lua scripts
+in the `lua-scripts/` directory.
 
 ## 📋 Available Scripts
 
@@ -11,12 +12,8 @@ Returns the current time in various formats with optimized caching.
 **Usage:**
 
 ```markdown
-{{lua:current_time}}
-{{lua:current_time:friendly}}
-{{lua:current_time:local}}
-{{lua:current_time:date}}
-{{lua:current_time:time}}
-{{lua:current_time:unix}}
+{{lua:current_time}} {{lua:current_time:friendly}} {{lua:current_time:local}}
+{{lua:current_time:date}} {{lua:current_time:time}} {{lua:current_time:unix}}
 ```
 
 **Parameters:**
@@ -31,8 +28,7 @@ Returns the current time in various formats with optimized caching.
 **Example Output:**
 
 ```markdown
-Current time: {{lua:current_time}}
-Build date: {{lua:current_time:date}}
+Current time: {{lua:current_time}} Build date: {{lua:current_time:date}}
 Friendly time: {{lua:current_time:friendly}}
 ```
 
@@ -43,9 +39,7 @@ Generates numbered lists with custom prefixes.
 **Usage:**
 
 ```markdown
-{{lua:counter:Item,3}}
-{{lua:counter:Step,5}}
-{{lua:counter:Task,4}}
+{{lua:counter:Item,3}} {{lua:counter:Step,5}} {{lua:counter:Task,4}}
 ```
 
 **Parameters:**
@@ -92,8 +86,7 @@ Advanced time utilities with caching and multiple format support.
 **Usage:**
 
 ```markdown
-{{lua:time_module:format,timezone}}
-{{lua:time_module:rfc2822}}
+{{lua:time_module:format,timezone}} {{lua:time_module:rfc2822}}
 {{lua:time_module:iso8601}}
 ```
 
@@ -184,8 +177,7 @@ end
 **Usage:**
 
 ```markdown
-{{lua:weather:New York,detailed}}
-{{lua:weather:London}}
+{{lua:weather:New York,detailed}} {{lua:weather:London}}
 ```
 
 ## 📊 Performance Considerations
