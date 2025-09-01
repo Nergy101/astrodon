@@ -2,12 +2,16 @@
 
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { serveDir } from "https://deno.land/std@0.208.0/http/file_server.ts";
-import { extname } from "https://deno.land/std@0.208.0/path/mod.ts";
+import { extname, join } from "https://deno.land/std@0.208.0/path/mod.ts";
 import { LuaFactory } from "npm:wasmoon@1.16.0";
 
 // Get port from command line arguments or use default
 const portArg = Deno.args.find(arg => arg.startsWith('--port='));
 const port = portArg ? parseInt(portArg.split('=')[1]) : 8000;
+const rootArg = Deno.args.find(arg => arg.startsWith('--root='));
+const ROOT = rootArg ? rootArg.split('=')[1] : './dist';
+const luaDirArg = Deno.args.find(arg => arg.startsWith('--luaDir='));
+const LUA_DIR = luaDirArg ? luaDirArg.split('=')[1] : './lua-scripts';
 
 // Performance optimizations: Response cache
 const responseCache = new Map<string, { response: Response; timestamp: number }>();
@@ -64,7 +68,7 @@ setInterval(() => {
 }, CACHE_TTL);
 
 console.log(`🚀 Starting development server at http://localhost:${port}`);
-console.log(`📁 Serving files from ./dist/`);
+console.log(`📁 Serving files from ${ROOT}/`);
 console.log(`🔄 Auto fallback to index.html enabled`);
 console.log(`⚡ API caching enabled (5min TTL), normal routes disabled`);
 
@@ -152,7 +156,7 @@ await serve(
                 }
 
                 // Read and execute the current_time.lua script
-                const luaScript = await Deno.readTextFile("./lua-scripts/current_time.lua");
+                const luaScript = await Deno.readTextFile(join(LUA_DIR, "current_time.lua"));
 
                 // Use WASMOON for secure execution
                 const factory = new LuaFactory();
@@ -234,25 +238,25 @@ await serve(
                 let scriptPath = "";
 
                 if (module === "render-time" || module === "current-time") {
-                    scriptPath = "./lua-scripts/current_time.lua";
+                    scriptPath = join(LUA_DIR, "current_time.lua");
                     const format = sanitizedContext.format || "iso";
                     luaScript = await Deno.readTextFile(scriptPath);
                     // Call the main function with the format parameter
                     luaScript += `\nreturn main("${format}")`;
                 } else if (module === "counter") {
-                    scriptPath = "./lua-scripts/counter.lua";
+                    scriptPath = join(LUA_DIR, "counter.lua");
                     const prefix = sanitizedContext.prefix || "Item";
                     const count = sanitizedContext.count || 3;
                     luaScript = await Deno.readTextFile(scriptPath);
                     // Call the main function with parameters
                     luaScript += `\nreturn main("${prefix}", ${count})`;
                 } else if (module === "random-quote") {
-                    scriptPath = "./lua-scripts/random_quote.lua";
+                    scriptPath = join(LUA_DIR, "random_quote.lua");
                     luaScript = await Deno.readTextFile(scriptPath);
                     // Call the main function
                     luaScript += `\nreturn main()`;
                 } else if (module === "time-module") {
-                    scriptPath = "./lua-scripts/time_module.lua";
+                    scriptPath = join(LUA_DIR, "time_module.lua");
                     luaScript = await Deno.readTextFile(scriptPath);
                     // Return the module functions
                     luaScript += `\nreturn { get_current_time = get_current_time, get_timestamp = get_timestamp, get_time_components = get_time_components }`;
@@ -316,7 +320,7 @@ await serve(
             let htmlPath = path.endsWith("/") ? path.slice(0, -1) : path;
             htmlPath = htmlPath + ".html";
             try {
-                const html = await Deno.readTextFile("./dist" + htmlPath);
+                const html = await Deno.readTextFile(ROOT + htmlPath);
                 const response = compressResponse(html, "text/html; charset=utf-8", false);
                 setCachedResponse(path, response);
                 return response;
@@ -328,7 +332,7 @@ await serve(
         // Try to serve the requested file
         try {
             const response = await serveDir(req, {
-                fsRoot: "./dist",
+                fsRoot: ROOT,
                 urlRoot: "",
             });
 
@@ -355,7 +359,7 @@ await serve(
 
         // Fallback to index.html for 404s (SPA-style routing)
         try {
-            const indexPath = "./dist/index.html";
+            const indexPath = join(ROOT, "index.html");
             const indexContent = await Deno.readTextFile(indexPath);
 
             const response = compressResponse(indexContent, "text/html; charset=utf-8", false);

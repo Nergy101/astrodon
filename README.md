@@ -1,10 +1,15 @@
-# Deno+Lua Static Site Generator
+# Astrodon — Deno + Lua Static Site Generation Framework
 
 [![Deno](https://img.shields.io/badge/Deno-1.40+-000000?style=flat&logo=deno)](https://deno.land/)
 [![Lua](https://img.shields.io/badge/Lua-5.1+-0000AA?style=flat&logo=lua)](https://www.lua.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![Status](<https://img.shields.io/badge/status-alpha%20(0.0.1)-orange>)
 
-A high-performance static site generator built with Deno and Lua templating, featuring advanced interpolation, image optimization, and comprehensive performance monitoring.
+Astrodon is a reusable framework for building static sites using Deno and Lua. Use it as a library in your own projects to build and serve content, with Lua-powered templating/interpolation, optional image optimization, and performance tooling.
+
+Note: This is an early alpha release (`0.0.1-alpha`). The API may change.
+
+If you're looking for a reference implementation, see the example blog that uses Astrodon.
 
 ## ✨ Features
 
@@ -18,20 +23,25 @@ A high-performance static site generator built with Deno and Lua templating, fea
 - **🌐 Development Server**: Live preview with hot reloading
 - **📊 Real-time Metrics**: Build performance tracking and optimization insights
 
-## 🚀 Quick Start
+## 🚀 Quick Start (as a Framework)
 
 ### Prerequisites
 
 - [Deno](https://deno.land/) (v1.40+)
 - [Lua](https://www.lua.org/) (v5.1+)
 
-### Installation
+### Install in your project
 
-1. **Clone the repository:**
+1. **Add Astrodon to your Deno project (using import maps or direct URL import):**
 
-   ```bash
-   git clone https://github.com/Nergy101/astrodon.git
-   cd astrodon
+   Add to your `deno.json` import map:
+
+   ```json
+   {
+     "imports": {
+       "astrodon": "https://raw.githubusercontent.com/Nergy101/astrodon/main/mod.ts"
+     }
+   }
    ```
 
 2. **Install image optimization tools** (optional but recommended):
@@ -41,24 +51,50 @@ A high-performance static site generator built with Deno and Lua templating, fea
    # or manually: npm install -g @funboxteam/optimizt
    ```
 
-3. **Build your site:**
+3. **Use the API in your project:**
 
-   ```bash
-   deno task build
+   Create `build.ts` in your site:
+
+   ```ts
+   #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run
+   import { build } from 'astrodon';
+
+   await build({
+     contentDir: new URL('./routes', import.meta.url).pathname,
+     outDir: new URL('./dist', import.meta.url).pathname,
+   });
    ```
 
-4. **Serve locally:**
+   Create `serve.ts` in your site:
 
-   ```bash
-   deno task serve
+   ```ts
+   #!/usr/bin/env -S deno run --allow-read --allow-net --allow-run
+   import { serve } from 'astrodon';
+
+   await serve({
+     root: new URL('./dist', import.meta.url).pathname,
+     port: 8000,
+   });
    ```
 
-5. **Open your browser** to `http://localhost:8000`
+4. **Build your site:**
 
-## 📁 Project Structure
+   ```bash
+   deno run -A build.ts
+   ```
+
+5. **Serve locally:**
+
+   ```bash
+   deno run -A serve.ts
+   ```
+
+6. **Open your browser** to `http://localhost:8000`
+
+## 📁 Typical Project Structure (consumer project)
 
 ```
-deno-lua/
+my-site/
 ├── routes/              # Your content (Markdown files)
 │   ├── index.md        # Homepage
 │   ├── index.lua       # Optional: custom rendering
@@ -70,19 +106,14 @@ deno-lua/
 ├── assets/             # Static assets (images, etc.)
 │   └── sample.jpg
 ├── dist/               # Generated output (created by build)
-├── docs/               # Documentation
-│   ├── README.md
-│   ├── LUA_INTERPOLATION.md
-│   └── OPTIMIZATION.md
-├── build.ts            # Build script with optimizations
-├── serve.ts            # Development server with caching
-├── performance-test.ts # Performance benchmarking
-├── optimization.config.json # Performance configuration
-├── deno.json           # Deno configuration
-└── README.md           # This file
+├── build.ts            # Uses Astrodon.build
+├── serve.ts            # Uses Astrodon.serve
+├── optimization.config.json # Optional performance configuration
+├── deno.json           # Deno configuration with import map
+└── README.md
 ```
 
-## ✍️ Writing Content
+## ✍️ Writing Content (with Lua)
 
 ### Markdown with Dynamic Content
 
@@ -133,29 +164,13 @@ This post was generated on {{lua:current_time:friendly}}.
 - `{{lua:counter:Item,3}}` - Generates "Item 1, Item 2, Item 3"
 - `{{lua:random_quote}}` - Returns a random programming quote
 
-## 🛠️ Available Commands
+## 🛠️ Commands (consumer project)
 
 ```bash
-# Build the site
-deno task build
-
-# Build with image optimization
-deno task build:images
-
-# Build and watch for changes
-deno task dev
-
-# Serve the built site locally
-deno task serve
-
-# Run performance benchmarks
-deno task benchmark
-
-# Build with increased memory limit
-deno task build:fast
-
-# Production server with increased memory
-deno task serve:prod
+deno run -A build.ts          # Build the site
+deno run -A serve.ts          # Serve locally
+deno task build:images        # Optional image optimization (if configured)
+deno task benchmark           # Optional performance tests (if included)
 ```
 
 ## Running on a Custom Port
@@ -235,6 +250,17 @@ Performance settings are configurable via `optimization.config.json`:
 - **[Lua Interpolation Guide](docs/LUA_INTERPOLATION.md)** - Dynamic content generation
 - **[Lua Scripts Reference](docs/LUA_SCRIPTS_REFERENCE.md)** - Comprehensive script reference
 - **[Performance Optimizations](docs/OPTIMIZATION.md)** - Detailed optimization documentation
+
+## 📦 Publishing (JSR)
+
+Astrodon is prepared for publishing to JSR as `0.0.1-alpha`.
+
+Commands:
+
+```bash
+deno task jsr:login     # Authenticate once
+deno task jsr:publish   # Publish the package
+```
 
 ## 🚀 Deployment
 

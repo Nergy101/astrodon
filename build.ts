@@ -1,11 +1,27 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run
 
 import { ensureDir, copy } from "https://deno.land/std@0.208.0/fs/mod.ts";
-import { join, extname, basename, dirname } from "https://deno.land/std@0.208.0/path/mod.ts";
+import { join, extname, basename, dirname, relative, fromFileUrl } from "https://deno.land/std@0.208.0/path/mod.ts";
 import { crypto } from "https://deno.land/std@0.208.0/crypto/mod.ts";
 
 // Cache for processed files to avoid reprocessing unchanged content
 const fileCache = new Map<string, { hash: string; content: string }>();
+
+// Configurable directories via CLI flags
+function getArg(name: string, defaultValue: string): string {
+    const arg = Deno.args.find(a => a.startsWith(`--${name}=`));
+    if (!arg) return defaultValue;
+    return arg.substring(name.length + 3);
+}
+
+const scriptDir = dirname(fromFileUrl(import.meta.url));
+
+// Content and output directories (can be absolute or relative)
+const contentDir = getArg("contentDir", "./routes");
+const outDir = getArg("outDir", "./dist");
+const assetsDir = getArg("assetsDir", "./assets");
+const luaDir = getArg("luaDir", "./lua-scripts");
+const templatePath = getArg("template", "./template.lua");
 
 // Simple hash function for file content
 async function getFileHash(content: string): Promise<string> {
@@ -58,8 +74,8 @@ function parseMarkdown(markdown: string): string {
         webpSrc = webpSrc.replace(/[#?].*$/, '');
         webpSrc = webpSrc.replace(/\.[^.\/]+$/, '.webp');
 
-        // Check if WebP file exists in dist/assets
-        const webpPath = webpSrc.replace('/assets/', './dist/assets/');
+        // Check if WebP file exists in output assets
+        const webpPath = join(outDir, webpSrc.replace(/^\/assets\//, 'assets/'));
         let webpExists = false;
         try {
             // Synchronous check for file existence
@@ -862,7 +878,7 @@ export function parseLuaInterpolations(content: string): LuaInterpolation[] {
 }
 
 export async function executeLuaScript(scriptName: string, params?: string[]): Promise<string> {
-    const luaPath = `./lua-scripts/${scriptName}.lua`;
+    const luaPath = join(luaDir, `${scriptName}.lua`);
 
     try {
         // Check if the script exists
@@ -934,7 +950,7 @@ async function processTOCMarker(content: string, filePath: string): Promise<stri
     }
 
     // Extract directory from file path
-    const relativePath = filePath.replace(/^\.?\/?routes\//, '');
+    const relativePath = relative(contentDir, filePath);
     const directory = dirname(relativePath);
 
     // Only process TOC for index.md files in subdirectories
@@ -943,7 +959,7 @@ async function processTOCMarker(content: string, filePath: string): Promise<stri
     }
 
     try {
-        const targetDir = `./routes/${directory}`;
+        const targetDir = join(contentDir, directory);
         const posts: Array<{
             title: string;
             date: string;
@@ -1055,7 +1071,7 @@ async function processTOCMarker(content: string, filePath: string): Promise<stri
 
 // Process Lua template if it exists
 async function processLuaTemplate(mdPath: string, content: string, meta: Record<string, any>): Promise<string> {
-    const luaPath = './template.lua';
+    const luaPath = templatePath;
 
     try {
         const luaFile = await Deno.readTextFile(luaPath);
@@ -1200,7 +1216,7 @@ async function extractMetadata(content: string): Promise<Record<string, any>> {
 // Helper function to check if WebP logo exists
 function checkWebPLogoExists(): boolean {
     try {
-        const webpPath = './dist/assets/nemic-logos/logo.webp';
+        const webpPath = join(outDir, 'assets/nemic-logos/logo.webp');
         const stat = Deno.statSync(webpPath);
         return stat.isFile;
     } catch {
@@ -1257,7 +1273,7 @@ return os.date("!%Y-%m-%dT%H:%M:%SZ")
 
 // Generate navigation from routes directory
 async function generateNavigation(): Promise<NavItem[]> {
-    const routesDir = './routes';
+    const routesDir = contentDir;
     const navItems: NavItem[] = [];
 
     try {
@@ -1382,8 +1398,7 @@ function generateNavigationHTML(navItems: NavItem[], currentPath: string = ''): 
 
 // Copy assets (non-image files)
 async function copyAssets(): Promise<void> {
-    const assetsDir = './assets';
-    const distAssetsDir = './dist/assets';
+    const distAssetsDir = join(outDir, 'assets');
 
     try {
         await ensureDir(distAssetsDir);
@@ -1418,7 +1433,7 @@ async function copyAssets(): Promise<void> {
 
     // Always copy favicon.ico to dist root
     try {
-        await copy('./assets/favicon.ico', './dist/favicon.ico', { overwrite: true });
+        await copy(join(assetsDir, 'favicon.ico'), join(outDir, 'favicon.ico'), { overwrite: true });
         console.log('✅ favicon.ico copied to dist/');
     } catch (error) {
         // Ignore if not present
@@ -1427,8 +1442,7 @@ async function copyAssets(): Promise<void> {
 
 // Optimize images to WebP format using optimizt
 async function optimizeImages(): Promise<void> {
-    const assetsDir = './assets';
-    const distAssetsDir = './dist/assets';
+    const distAssetsDir = join(outDir, 'assets');
 
     // Find all image files recursively
     const imageFiles: Array<{ fullPath: string; relativePath: string }> = [];
@@ -1598,7 +1612,7 @@ async function build(): Promise<void> {
     startBuildTimer();
 
     // Ensure dist directory exists
-    await ensureDir('./dist');
+    await ensureDir(outDir);
 
     // Generate navigation
     console.log('🧭 Generating navigation...');
@@ -1608,7 +1622,7 @@ async function build(): Promise<void> {
     console.log('Navigation HTML:', navigationHTML);
 
     // Find all markdown files in routes (including subdirectories)
-    const routesDir = './routes';
+    const routesDir = contentDir;
     const markdownFiles: string[] = [];
 
     async function scanDirectory(dir: string, basePath: string = '') {
@@ -1653,7 +1667,7 @@ async function build(): Promise<void> {
 
             // Determine current path for active navigation
             const fileName = basename(filePath, '.md');
-            const relativePath = filePath.replace(/^\.?\/?routes\//, '').replace('.md', '');
+            const relativePath = relative(contentDir, filePath).replace('.md', '');
             let currentPath = '';
 
             if (fileName === 'index') {
@@ -1682,19 +1696,19 @@ async function build(): Promise<void> {
 
             if (fileName === 'index') {
                 if (relativePath === 'index') {
-                    outputPath = join('./dist', 'index.html');
+                    outputPath = join(outDir, 'index.html');
                 } else {
                     // index.md in a subdirectory
                     const dirName = dirname(relativePath);
-                    outputPath = join('./dist', dirName, 'index.html');
+                    outputPath = join(outDir, dirName, 'index.html');
                 }
             } else {
                 if (relativePath === fileName) {
                     // Top-level file
-                    outputPath = join('./dist', `${fileName}.html`);
+                    outputPath = join(outDir, `${fileName}.html`);
                 } else {
                     // File in subdirectory
-                    outputPath = join('./dist', `${relativePath}.html`);
+                    outputPath = join(outDir, `${relativePath}.html`);
                 }
             }
 
@@ -1740,7 +1754,7 @@ async function build(): Promise<void> {
         serveSrc = serveSrc.replace(/Deno\.readTextFile\("\.\/dist" \+ htmlPath\)/g, 'Deno.readTextFile(htmlPath.slice(1))');
         serveSrc = serveSrc.replace(/const indexPath = "\.\/dist\/index\.html";/g, 'const indexPath = "index.html";');
         serveSrc = serveSrc.replace(/const indexContent = await Deno\.readTextFile\(indexPath\);/g, 'const indexContent = await Deno.readTextFile(indexPath);');
-        await Deno.writeTextFile('./dist/serve.ts', serveSrc);
+        await Deno.writeTextFile(join(outDir, 'serve.ts'), serveSrc);
         console.log('✅ serve.ts copied and patched to dist/');
     } catch (error) {
         console.error('❌ Failed to copy/patch serve.ts:', error);
