@@ -6,6 +6,7 @@ export interface BuildOptions {
   assetsDir?: string;
   luaDir?: string;
   template?: string;
+  componentsDir?: string;
   allowNet?: boolean;
 }
 
@@ -29,6 +30,8 @@ export async function build(options: BuildOptions): Promise<void> {
     new URL("lua-scripts/", pkgBase).toString();
   const resolvedTemplate = options.template ??
     new URL("template.lua", pkgBase).pathname;
+  const resolvedComponentsDir = options.componentsDir ??
+    new URL("components", pkgBase).pathname;
 
   const args: string[] = [
     "run",
@@ -45,6 +48,7 @@ export async function build(options: BuildOptions): Promise<void> {
     `--assetsDir=${resolvedAssetsDir}`,
     `--luaDir=${resolvedLuaDir}`,
     `--template=${resolvedTemplate}`,
+    `--componentsDir=${resolvedComponentsDir}`,
   );
 
   const cmd = new Deno.Command("deno", {

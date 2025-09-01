@@ -25,6 +25,7 @@ function getArg(name: string, defaultValue: string): string {
 const contentDir = getArg("contentDir", "./routes");
 const outDir = getArg("outDir", "./dist");
 const assetsDir = getArg("assetsDir", "./assets");
+const componentsDir = getArg("componentsDir", "./components");
 const luaDir = getArg("luaDir", "./lua-scripts");
 const templatePath = getArg("template", "./template.lua");
 
@@ -622,30 +623,7 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
    </head>
 <body>
-    <!-- Navigation Bar -->
-    <nav class="navbar">
-        <div class="navbar-container">
-            <a href="/" class="navbar-brand"><picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture><span class="navbar-brand-text">Nergy's Blog</span></a>
-            <button class="mobile-menu-toggle" id="mobile-menu-toggle" aria-label="Toggle mobile menu">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                </svg>
-            </button>
-            <ul class="navbar-nav" id="navbar-nav">
-                {{navigation}}
-            </ul>
-            <button class="nav-link theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">
-                <svg class="sun-icon" viewBox="0 0 24 24" style="display: none;">
-                    <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/>
-                </svg>
-                <svg class="moon-icon" viewBox="0 0 24 24">
-                    <path d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z"/>
-                </svg>
-            </button>
-        </div>
-    </nav>
+    {{component:navbar}}
 
     <div class="page">
         <main class="main">
@@ -936,6 +914,47 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
 </script>
     </body>
     </html>`;
+
+// Component placeholder and defaults
+const NAVBAR_COMPONENT_PLACEHOLDER = "{{component:navbar}}";
+const DEFAULT_NAVBAR_HTML = `<nav class="navbar">
+        <div class="navbar-container">
+            <a href="/" class="navbar-brand"><picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture><span class="navbar-brand-text">Nergy's Blog</span></a>
+            <button class="mobile-menu-toggle" id="mobile-menu-toggle" aria-label="Toggle mobile menu">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <ul class="navbar-nav" id="navbar-nav">
+                {{navigation}}
+            </ul>
+            <button class="nav-link theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">
+                <svg class="sun-icon" viewBox="0 0 24 24" style="display: none;">
+                    <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z"/>
+                </svg>
+                <svg class="moon-icon" viewBox="0 0 24 24">
+                    <path d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z"/>
+                </svg>
+            </button>
+        </div>
+    </nav>`;
+
+async function loadComponentHtml(name: string): Promise<string> {
+  try {
+    const candidatePath = join(componentsDir, `${name}.html`);
+    const content = await Deno.readTextFile(candidatePath);
+    return content;
+  } catch {
+    switch (name) {
+      case "navbar":
+        return DEFAULT_NAVBAR_HTML;
+      default:
+        return "";
+    }
+  }
+}
 
 // Helper: Convert JS object to Lua table string
 function jsToLuaTable(obj: any): string {
@@ -1431,13 +1450,16 @@ function checkWebPLogoExists(): boolean {
 }
 
 // Generate HTML from template
-function generateHTML(
+async function generateHTML(
   content: string,
   meta: Record<string, any>,
-  navigation: string,
-  currentPath: string = "",
-): string {
+  navigation: string
+): Promise<string> {
   let html = DEFAULT_TEMPLATE;
+
+  // Inject components (navbar)
+  const navbarHtml = await loadComponentHtml("navbar");
+  html = html.replace(NAVBAR_COMPONENT_PLACEHOLDER, navbarHtml);
 
   // Check if WebP logo exists and replace the logo HTML accordingly
   const webpLogoExists = checkWebPLogoExists();
@@ -1938,11 +1960,10 @@ async function build(): Promise<void> {
 
       // Generate navigation with current path
       const pageNavigationHTML = generateNavigationHTML(navItems, currentPath);
-      const html = generateHTML(
+      const html = await generateHTML(
         pageData.content,
         pageData.meta,
-        pageNavigationHTML,
-        currentPath,
+        pageNavigationHTML
       );
 
       // Determine output path
