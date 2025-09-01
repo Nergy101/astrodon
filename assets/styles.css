@@ -2048,7 +2048,7 @@ pre[class*='language-'] {
 .hero-section {
   background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
   color: white;
-  padding: var(--3xl) 0;
+  padding: var(--3xl);
   margin: calc(-1 * var(--xl)) calc(-1 * var(--xl)) var(--3xl)
     calc(-1 * var(--xl));
   border-radius: var(--radius-xl);

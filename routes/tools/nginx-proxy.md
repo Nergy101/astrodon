@@ -1,7 +1,7 @@
 ---
 title: Nginx Proxy Manager
 date: 2025-07-10
-author: Nergy
+author: Christian / Nergy101
 tags: [nginx, proxy, reverse-proxy, docker, web-server, ssl, lets-encrypt]
 ---
 

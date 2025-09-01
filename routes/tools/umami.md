@@ -1,7 +1,7 @@
 ---
 title: Umami
 date: 2025-07-10
-author: Nergy
+author: Christian / Nergy101
 tags: [analytics, privacy, umami, self-hosted, web-analytics, gdpr, docker]
 ---
 

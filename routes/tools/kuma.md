@@ -1,7 +1,7 @@
 ---
 title: Kuma
 date: 2025-07-10
-author: Nergy
+author: Christian / Nergy101
 tags: [monitoring, uptime, kuma, self-hosted, docker]
 ---
 

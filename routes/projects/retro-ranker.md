@@ -5,7 +5,7 @@ author: Christian / Nergy101
 tags: [deno, fresh, web-app, retro-gaming]
 ---
 
-# Retro Ranker
+# 🎮 Retro Ranker
 
 A modern web application for ranking and comparing retro gaming devices. Built with Deno Fresh for optimal performance and developer experience.
 

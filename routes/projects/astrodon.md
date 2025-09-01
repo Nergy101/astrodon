@@ -5,9 +5,11 @@ author: Christian / Nergy101
 tags: [deno, static-site, markdown, lua]
 ---
 
-# Astrodon
+# 🌌 Astrodon
 
 A fast, modern static site generator built with Deno. Features Lua interpolation, dynamic content generation, and optimized build performance.
+
+**By the way, this blog uses Astrodon as well!**
 
 ## Features
 

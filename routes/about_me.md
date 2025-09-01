@@ -1,13 +1,13 @@
 ---
-title: Welcome to My Blog
+title: About me
 date: 2025-07-15
 author: Christian / Nergy101
 tags: [🚀]
 ---
 
-# About Me
+# About me
 
-Welcome to my digital space! I'm a passionate developer who loves exploring and working with a wide variety of technologies. Here's a comprehensive overview of the tech stack I work with, organized by how I use them.
+I'm a passionate developer who loves exploring and working with a wide variety of technologies. Here's a comprehensive overview of the tech stack I work with, organized by how I use them.
 
 ## Professional Technologies
 

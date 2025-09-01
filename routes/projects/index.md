@@ -20,8 +20,6 @@ I love building things and learning new technologies. My projects range from:
 - **Libraries & Packages**: Open-source contributions and personal libraries
 - **Experiments**: Proof-of-concepts and learning projects
 
-Feel free to explore the projects below and check out the source code on GitHub!
-
 ---
 
 Want to collaborate? Feel free to reach out on [GitHub](https://github.com/Nergy101)
