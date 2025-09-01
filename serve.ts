@@ -10,7 +10,27 @@ const port = portArg ? parseInt(portArg.split("=")[1]) : 8000;
 const rootArg = Deno.args.find((arg) => arg.startsWith("--root="));
 const ROOT = rootArg ? rootArg.split("=")[1] : "./dist";
 const luaDirArg = Deno.args.find((arg) => arg.startsWith("--luaDir="));
-const LUA_DIR = luaDirArg ? luaDirArg.split("=")[1] : "./lua-scripts";
+const LUA_DIR = luaDirArg ? luaDirArg.split("=")[1] : "./lua-scripts/";
+
+function isHttpUrl(pathOrUrl: string): boolean {
+  try {
+    const u = new URL(pathOrUrl);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+async function readLuaFile(relativeName: string): Promise<string> {
+  const base = LUA_DIR;
+  if (isHttpUrl(base)) {
+    const url = new URL(relativeName, base).toString();
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
+    return await res.text();
+  }
+  return await Deno.readTextFile(join(base, relativeName));
+}
 
 // Performance optimizations: Response cache
 const responseCache = new Map<
@@ -143,8 +163,6 @@ Deno.serve({ port }, async (req: Request) => {
   if (path.startsWith("/lua-scripts/")) {
     const cachedResponse = getCachedResponse(path);
     if (cachedResponse) {
-      // Optionally log cache hit for API endpoints only
-      // console.log(`⚡ Cache hit for ${path}`);
       return cachedResponse;
     }
   }
@@ -178,9 +196,7 @@ Deno.serve({ port }, async (req: Request) => {
       }
 
       // Read and execute the current_time.lua script
-      const luaScript = await Deno.readTextFile(
-        join(LUA_DIR, "current_time.lua"),
-      );
+      const luaScript = await readLuaFile("current_time.lua");
 
       // Use WASMOON for secure execution
       const factory = new LuaFactory();
@@ -250,7 +266,6 @@ Deno.serve({ port }, async (req: Request) => {
         count?: number;
       } = {};
       if (context && typeof context === "object") {
-        // Allow specific context properties for each module
         if (module === "render-time" || module === "current-time") {
           const allowedFormats = [
             "iso",
@@ -283,8 +298,7 @@ Deno.serve({ port }, async (req: Request) => {
             sanitizedContext.count = context.count;
           }
         } else if (module === "time-module") {
-          // time-module doesn't need additional context validation
-          // it provides predefined functions
+          // no extra validation
         }
       }
 
@@ -293,27 +307,23 @@ Deno.serve({ port }, async (req: Request) => {
       let scriptPath = "";
 
       if (module === "render-time" || module === "current-time") {
-        scriptPath = join(LUA_DIR, "current_time.lua");
+        scriptPath = "current_time.lua";
         const format = sanitizedContext.format || "iso";
-        luaScript = await Deno.readTextFile(scriptPath);
-        // Call the main function with the format parameter
+        luaScript = await readLuaFile(scriptPath);
         luaScript += `\nreturn main("${format}")`;
       } else if (module === "counter") {
-        scriptPath = join(LUA_DIR, "counter.lua");
+        scriptPath = "counter.lua";
         const prefix = sanitizedContext.prefix || "Item";
         const count = sanitizedContext.count || 3;
-        luaScript = await Deno.readTextFile(scriptPath);
-        // Call the main function with parameters
+        luaScript = await readLuaFile(scriptPath);
         luaScript += `\nreturn main("${prefix}", ${count})`;
       } else if (module === "random-quote") {
-        scriptPath = join(LUA_DIR, "random_quote.lua");
-        luaScript = await Deno.readTextFile(scriptPath);
-        // Call the main function
+        scriptPath = "random_quote.lua";
+        luaScript = await readLuaFile(scriptPath);
         luaScript += `\nreturn main()`;
       } else if (module === "time-module") {
-        scriptPath = join(LUA_DIR, "time_module.lua");
-        luaScript = await Deno.readTextFile(scriptPath);
-        // Return the module functions
+        scriptPath = "time_module.lua";
+        luaScript = await readLuaFile(scriptPath);
         luaScript +=
           `\nreturn { get_current_time = get_current_time, get_timestamp = get_timestamp, get_time_components = get_time_components }`;
       }
@@ -324,8 +334,6 @@ Deno.serve({ port }, async (req: Request) => {
         const factory = new LuaFactory();
         const lua = await factory.createEngine();
         result = await lua.doString(luaScript);
-        // Note: LuaEngine doesn't have a close method in this version
-        // The engine will be garbage collected automatically
       } catch (err) {
         console.error("Lua execution error:", err);
         const response = new Response(
@@ -341,7 +349,6 @@ Deno.serve({ port }, async (req: Request) => {
         return response;
       }
 
-      // SECURITY: Limit output size
       if (typeof result === "string" && result.length > 1000) {
         const response = new Response(
           JSON.stringify({ error: "Output too large" }),
@@ -360,7 +367,7 @@ Deno.serve({ port }, async (req: Request) => {
         status: 200,
         headers: {
           "content-type": "application/json",
-          "cache-control": "no-cache, no-store, must-revalidate", // No cache for dynamic content
+          "cache-control": "no-cache, no-store, must-revalidate",
         },
       });
       return response;
@@ -405,9 +412,7 @@ Deno.serve({ port }, async (req: Request) => {
       urlRoot: "",
     });
 
-    // If the file exists, return it with cache disabled for normal routes
     if (response.status !== 404) {
-      // Clone the response and add no-cache headers for normal routes
       const headers = new Headers(response.headers);
       headers.set("cache-control", "no-cache, no-store, must-revalidate");
       headers.set("pragma", "no-cache");
@@ -439,7 +444,6 @@ Deno.serve({ port }, async (req: Request) => {
     setCachedResponse(path, response);
     return response;
   } catch (_error) {
-    // If index.html doesn't exist, return a proper 404
     const response = new Response("404 - Page not found", {
       status: 404,
       headers: {

@@ -153,9 +153,8 @@ function parseMarkdown(markdown: string): string {
         !/^@@CODEBLOCK\d+@@$/.test(p2.trim()) &&
         !/^__SCRIPT_BLOCK_\d+__$/.test(p2.trim())
       ) {
-        return `${p1}<pre><code class=\"language-html\">${
-          p2.replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        }</code></pre>`;
+        return `${p1}<pre><code class=\"language-html\">${p2.replace(/</g, "&lt;").replace(/>/g, "&gt;")
+          }</code></pre>`;
       }
       return match;
     },
@@ -563,9 +562,8 @@ function parseMarkdown(markdown: string): string {
           return rawLang || "plaintext";
       }
     })();
-    const uniqueId = `code-${Date.now()}-${
-      Math.random().toString(36).substr(2, 9)
-    }`;
+    const uniqueId = `code-${Date.now()}-${Math.random().toString(36).substr(2, 9)
+      }`;
 
     return `<div class="code-block-container" data-language="${language}" id="${uniqueId}">
             <div class="code-block-header">
@@ -585,9 +583,8 @@ function parseMarkdown(markdown: string): string {
   markdown = markdown.replace(
     /\{\{htmlcode\}\}([\s\S]*?)\{\{\/htmlcode\}\}/g,
     (match, code) => {
-      return `<pre><code class=\"language-html\">${
-        code.replace(/</g, "&lt;").replace(/>/g, "&gt;")
-      }</code></pre>`;
+      return `<pre><code class=\"language-html\">${code.replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        }</code></pre>`;
     },
   );
 
@@ -1004,26 +1001,48 @@ export function parseLuaInterpolations(content: string): LuaInterpolation[] {
   return interpolations;
 }
 
+function isHttpUrl(pathOrUrl: string): boolean {
+  try {
+    const u = new URL(pathOrUrl);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+async function loadLuaScriptContent(baseDirOrUrl: string, relativeName: string): Promise<string> {
+  if (isHttpUrl(baseDirOrUrl)) {
+    const url = new URL(relativeName, baseDirOrUrl).toString();
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch ${url}: ${res.status}`);
+    }
+    return await res.text();
+  }
+  const fullPath = join(baseDirOrUrl, relativeName);
+  return await Deno.readTextFile(fullPath);
+}
+
 export async function executeLuaScript(
   scriptName: string,
   params?: string[],
 ): Promise<string> {
-  const luaPath = join(luaDir, `${scriptName}.lua`);
-
   try {
-    // Check if the script exists
-    await Deno.stat(luaPath);
+    // Load target script contents from filesystem or URL
+    const targetScriptContent = await loadLuaScriptContent(
+      luaDir,
+      `${scriptName}.lua`,
+    );
 
-    // Create a temporary Lua script that executes the target script
-    let tempLuaScript = `dofile("${luaPath}")\n`;
+    // Create a temporary Lua script that embeds the target script
+    let tempLuaScript = `${targetScriptContent}\n`;
 
     // If the script has a main function, call it with parameters
     if (params && params.length > 0) {
       tempLuaScript += `\n-- Call main function with parameters\n`;
       tempLuaScript += `if main then\n`;
-      tempLuaScript += `  local result = main(${
-        params.map((p) => `"${p}"`).join(", ")
-      })\n`;
+      tempLuaScript += `  local result = main(${params.map((p) => `"${p}"`).join(", ")
+        })\n`;
       tempLuaScript += `  if result then\n`;
       tempLuaScript += `    print(result)\n`;
       tempLuaScript += `  end\n`;
@@ -1034,9 +1053,8 @@ export async function executeLuaScript(
     }
 
     // Write temporary script
-    const tempFile = `temp_interp_${Date.now()}_${
-      Math.random().toString(36).substr(2, 9)
-    }.lua`;
+    const tempFile = `temp_interp_${Date.now()}_${Math.random().toString(36).substr(2, 9)
+      }.lua`;
     await Deno.writeTextFile(tempFile, tempLuaScript);
 
     // Execute Lua script
@@ -1060,7 +1078,7 @@ export async function executeLuaScript(
 
     return output.trim();
   } catch (error) {
-    console.error(`Lua script not found or failed: ${luaPath}`);
+    console.error(`Lua script not found or failed: ${scriptName}.lua`);
     return `[Lua Script Not Found: ${scriptName}]`;
   }
 }
@@ -1177,26 +1195,22 @@ async function processTOCMarker(
             <h3 class="blog-card-title">${post.title}</h3>
             <div class="blog-card-meta">
                 <span class="blog-card-date">${post.date}</span>
-                ${
-          post.author
-            ? `<span class="blog-card-author">by ${post.author}</span>`
-            : ""
+                ${post.author
+          ? `<span class="blog-card-author">by ${post.author}</span>`
+          : ""
         }
             </div>
         </div>
-        ${
-          post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ""
+        ${post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ""
         }
-        ${
-          post.tags.length > 0
-            ? `<div class="blog-card-tags">
-            ${
-              post.tags.map((tag) =>
-                `<span class="blog-card-tag">${tag}</span>`
-              ).join("")
-            }
+        ${post.tags.length > 0
+          ? `<div class="blog-card-tags">
+            ${post.tags.map((tag) =>
+            `<span class="blog-card-tag">${tag}</span>`
+          ).join("")
+          }
         </div>`
-            : ""
+          : ""
         }
     </a>
 </div>`
@@ -1208,34 +1222,29 @@ async function processTOCMarker(
     <a href="${post.url}" class="content-card-link-wrapper">
         <div class="content-card-header">
             <h3 class="content-card-title">${post.title}</h3>
-            ${
-          post.date
-            ? `<div class="content-card-meta">
+            ${post.date
+          ? `<div class="content-card-meta">
                 <span class="content-card-date">${post.date}</span>
-                ${
-              post.author
-                ? `<span class="content-card-author">by ${post.author}</span>`
-                : ""
-            }
-            </div>`
+                ${post.author
+            ? `<span class="content-card-author">by ${post.author}</span>`
             : ""
+          }
+            </div>`
+          : ""
         }
         </div>
-        ${
-          post.excerpt
-            ? `<p class="content-card-excerpt">${post.excerpt}</p>`
-            : ""
+        ${post.excerpt
+          ? `<p class="content-card-excerpt">${post.excerpt}</p>`
+          : ""
         }
-        ${
-          post.tags.length > 0
-            ? `<div class="content-card-tags">
-            ${
-              post.tags.map((tag) =>
-                `<span class="content-card-tag">${tag}</span>`
-              ).join("")
-            }
+        ${post.tags.length > 0
+          ? `<div class="content-card-tags">
+            ${post.tags.map((tag) =>
+            `<span class="content-card-tag">${tag}</span>`
+          ).join("")
+          }
         </div>`
-            : ""
+          : ""
         }
     </a>
 </div>`
@@ -1581,16 +1590,14 @@ function generateNavigationHTML(
 
       // Dropdown menu
       html += `<li class="nav-item nav-dropdown${activeClass}">`;
-      html += `<button type="button" class="nav-link nav-dropdown-toggle${
-        isActive ? " active" : ""
-      }">${item.title}</button>`;
+      html += `<button type="button" class="nav-link nav-dropdown-toggle${isActive ? " active" : ""
+        }">${item.title}</button>`;
       html += `<div class="nav-dropdown-content">`;
 
       // Add "see all" item at the top of the dropdown
       const isSeeAllActive = currentPath === item.url;
-      html += `<a href="${item.url}" class="nav-dropdown-item${
-        isSeeAllActive ? " active" : ""
-      }">See All ${item.title}</a>`;
+      html += `<a href="${item.url}" class="nav-dropdown-item${isSeeAllActive ? " active" : ""
+        }">See All ${item.title}</a>`;
 
       // Add separator
       html += `<div class="nav-dropdown-separator"></div>`;
@@ -1598,9 +1605,8 @@ function generateNavigationHTML(
       // Add child items
       for (const child of item.children) {
         const isChildActive = currentPath === child.url;
-        html += `<a href="${child.url}" class="nav-dropdown-item${
-          isChildActive ? " active" : ""
-        }">${child.title}</a>`;
+        html += `<a href="${child.url}" class="nav-dropdown-item${isChildActive ? " active" : ""
+          }">${child.title}</a>`;
       }
       html += `</div>`;
       html += `</li>`;
@@ -1608,9 +1614,8 @@ function generateNavigationHTML(
       // Regular link
       const isActive = currentPath === item.url;
       html += `<li class="nav-item${isActive ? " active" : ""}">`;
-      html += `<a href="${item.url}" class="nav-link${
-        isActive ? " active" : ""
-      }">${item.title}</a>`;
+      html += `<a href="${item.url}" class="nav-link${isActive ? " active" : ""
+        }">${item.title}</a>`;
       html += `</li>`;
     }
   }

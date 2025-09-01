@@ -26,7 +26,7 @@ export async function build(options: BuildOptions): Promise<void> {
   const resolvedAssetsDir = options.assetsDir ??
     new URL("assets", pkgBase).pathname;
   const resolvedLuaDir = options.luaDir ??
-    new URL("lua-scripts", pkgBase).pathname;
+    new URL("lua-scripts/", pkgBase).toString();
   const resolvedTemplate = options.template ??
     new URL("template.lua", pkgBase).pathname;
 
@@ -36,7 +36,8 @@ export async function build(options: BuildOptions): Promise<void> {
     "--allow-write",
     "--allow-run",
   ];
-  if (options.allowNet) args.push("--allow-net");
+  const isRemotePkg = pkgBase.protocol === "http:" || pkgBase.protocol === "https:";
+  if (options.allowNet || isRemotePkg) args.push("--allow-net");
   args.push(
     buildScript,
     `--contentDir=${options.contentDir}`,
@@ -61,7 +62,7 @@ export async function serve(options: ServeOptions): Promise<void> {
   const serveScript = getScriptUrl("serve.ts");
   const pkgBase = new URL("./", import.meta.url);
   const resolvedLuaDir = options.luaDir ??
-    new URL("lua-scripts", pkgBase).pathname;
+    new URL("lua-scripts/", pkgBase).toString();
 
   const args: string[] = [
     "run",
