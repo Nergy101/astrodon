@@ -2,6 +2,8 @@
 
 Astrodon is a tiny Deno + Lua static site toolkit. Build markdown with optional Lua-powered interpolation, and serve the output with a minimal dev server. Keep your site simple, fast, and readable.
 
+See my blog for example usage: https://github.com/Nergy101/blog
+
 ## Quick start
 
 1. Install Deno 1.40+ and (optionally) Lua 5.1+
