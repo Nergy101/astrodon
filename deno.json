@@ -4,13 +4,7 @@
   "license": "MIT",
   "exports": "./mod.ts",
   "tasks": {
-    "build": "deno run --allow-read --allow-write --allow-run build.ts",
-    "serve": "deno run --allow-read --allow-net --allow-run serve.ts",
-    "build:serve": "deno run --allow-read --allow-write --allow-net --allow-run --watch build.ts & deno run --allow-read --allow-net --allow-run serve.ts",
     "benchmark": "deno run --allow-read --allow-write --allow-run --allow-net performance-test.ts",
-    "build:fast": "deno run --allow-read --allow-write --allow-run --allow-net --v8-flags=--max-old-space-size=4096 build.ts",
-    "serve:prod": "deno run --allow-read --allow-net --allow-run --v8-flags=--max-old-space-size=4096 serve.ts",
-    "build:images": "deno run --allow-read --allow-write --allow-run build.ts",
     "publish": "deno publish"
   },
   "imports": {
