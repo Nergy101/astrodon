@@ -1,4 +1,4 @@
-name: Advanced Release
+name: 🚀 Release Astrodon
 
 on:
   push:
@@ -37,12 +37,12 @@ jobs:
         run: |
           # Try to extract Deno version from deno.json using jq (available on Ubuntu runners)
           if command -v jq &> /dev/null; then
-            DENO_VERSION=$(jq -r '.compatibility.deno // "^2.0.0"' "${{ env.DENO_VERSION_FILE }}")
+            DENO_VERSION=$(jq -r '.compatibility.deno // "^2.5.0"' "${{ env.DENO_VERSION_FILE }}")
           else
             # Fallback: use grep and sed to extract version
-            DENO_VERSION=$(grep -o '"deno":\s*"[^"]*"' "${{ env.DENO_VERSION_FILE }}" | sed 's/.*"deno":\s*"\([^"]*\)".*/\1/' || echo "^2.0.0")
+            DENO_VERSION=$(grep -o '"deno":\s*"[^"]*"' "${{ env.DENO_VERSION_FILE }}" | sed 's/.*"deno":\s*"\([^"]*\)".*/\1/' || echo "^2.5.0")
           fi
-          
+
           # Extract version number and convert to vX.Y.Z format if needed
           if [[ "$DENO_VERSION" =~ \^([0-9]+\.[0-9]+) ]]; then
             DENO_VERSION="v${BASH_REMATCH[1]}.0"
@@ -183,7 +183,7 @@ jobs:
           PACKAGE_NAME="${{ steps.package_info.outputs.PACKAGE_NAME }}"
           # Extract package name without scope for archive naming
           ARCHIVE_PREFIX="${PACKAGE_NAME#@*/}"
-          
+
           # Create tar.gz archive
           cd dist
           tar -czf ../${ARCHIVE_PREFIX}-$VERSION.tar.gz .
@@ -306,4 +306,3 @@ jobs:
           ls -lh ${ARCHIVE_PREFIX}-${VERSION}.*
           echo ""
           echo "🎯 Release Type: ${{ steps.parse_tag.outputs.RELEASE_TYPE }}"
-
