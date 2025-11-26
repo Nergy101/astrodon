@@ -62,7 +62,37 @@ jobs:
       - name: Parse tag and determine release type
         id: parse_tag
         run: |
-          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          # Extract tag name from GITHUB_REF, handling both push and workflow_dispatch
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          elif [[ "$GITHUB_REF" == refs/heads/* ]]; then
+            # For workflow_dispatch, read version from deno.json and create tag
+            if command -v jq &> /dev/null; then
+              VERSION=$(jq -r '.version // "0.0.0"' "${{ env.DENO_VERSION_FILE }}")
+            else
+              VERSION=$(grep -o '"version":\s*"[^"]*"' "${{ env.DENO_VERSION_FILE }}" | sed 's/.*"version":\s*"\([^"]*\)".*/\1/' || echo "0.0.0")
+            fi
+            TAG_NAME="v${VERSION}"
+          else
+            # Fallback: read version from deno.json
+            if command -v jq &> /dev/null; then
+              VERSION=$(jq -r '.version // "0.0.0"' "${{ env.DENO_VERSION_FILE }}")
+            else
+              VERSION=$(grep -o '"version":\s*"[^"]*"' "${{ env.DENO_VERSION_FILE }}" | sed 's/.*"version":\s*"\([^"]*\)".*/\1/' || echo "0.0.0")
+            fi
+            TAG_NAME="v${VERSION}"
+          fi
+
+          # Ensure TAG_NAME doesn't start with refs/ (safety check)
+          TAG_NAME="${TAG_NAME#refs/tags/}"
+          TAG_NAME="${TAG_NAME#refs/}"
+
+          # Validate tag name format
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+[0-9]*)?$ ]]; then
+            echo "❌ Invalid tag name format: $TAG_NAME"
+            exit 1
+          fi
+
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
 
           # Extract version without prefix
@@ -116,6 +146,12 @@ jobs:
           "
           echo "✅ Updated deno.json version to $VERSION"
           cat deno.json | grep version
+
+      - name: Run tests to verify version
+        run: |
+          echo "🧪 Running tests to verify version works..."
+          deno task test
+          echo "✅ All tests passed - version verified"
 
       - name: Generate changelog
         id: changelog
@@ -214,12 +250,6 @@ jobs:
           deno task benchmark
           echo "✅ Performance benchmark completed successfully"
 
-      - name: Run Output Verification Tests
-        run: |
-          echo "🧪 Running output verification tests..."
-          deno task test
-          echo "✅ All output verification tests passed"
-
       - name: Publish to JSR
         if: github.event_name == 'push' || github.event.inputs.publish_to_jsr == 'true'
         run: |
@@ -235,3 +265,4 @@ jobs:
           body_path: release_body.md
           draft: ${{ steps.parse_tag.outputs.IS_DRAFT }}
           prerelease: ${{ steps.parse_tag.outputs.IS_PRERELEASE }}
+          make_latest: ${{ steps.parse_tag.outputs.IS_PRERELEASE == 'false' }}
