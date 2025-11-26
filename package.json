@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "optimizt": "npm:@funboxteam/optimizt@^5.0.2",
-    "wasmoon": "npm:wasmoon@^1.16.0"
+    "optimizt": "npm:@funboxteam/optimizt@^5.0.2"
   }
 }

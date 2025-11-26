@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run
 
-import { copy, ensureDir } from "jsr:@std/fs";
+import { copy, ensureDir } from 'jsr:@std/fs';
 import {
   basename,
   dirname,
@@ -8,40 +8,39 @@ import {
   fromFileUrl,
   join,
   relative,
-} from "jsr:@std/path";
-import { crypto } from "jsr:@std/crypto";
+} from 'jsr:@std/path';
+import { crypto } from 'jsr:@std/crypto';
 
 // Cache for processed files to avoid reprocessing unchanged content
 const fileCache = new Map<string, { hash: string; content: string }>();
 
 // Configurable directories via CLI flags
 function getArg(name: string, defaultValue: string): string {
-  const arg = Deno.args.find((a) => a.startsWith(`--${name}=`));
+  const arg = Deno.args.find(a => a.startsWith(`--${name}=`));
   if (!arg) return defaultValue;
   return arg.substring(name.length + 3);
 }
 
 // Content and output directories (can be absolute or relative)
-const contentDir = getArg("contentDir", "./routes");
-const outDir = getArg("outDir", "./dist");
-const assetsDir = getArg("assetsDir", "./assets");
-const componentsDir = getArg("componentsDir", "./components");
-const luaDir = getArg("luaDir", "./lua-scripts");
-const templatePath = getArg("template", "./template.lua");
+const contentDir = getArg('contentDir', './routes');
+const outDir = getArg('outDir', './dist');
+const assetsDir = getArg('assetsDir', './assets');
+const componentsDir = getArg('componentsDir', './components');
+const templatePath = getArg('template', './template.ts');
 
 // Simple hash function for file content
 async function getFileHash(content: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(content);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // Check if file needs reprocessing
 async function needsReprocessing(
   filePath: string,
-  content: string,
+  content: string
 ): Promise<boolean> {
   const cached = fileCache.get(filePath);
   if (!cached) return true;
@@ -54,7 +53,7 @@ async function needsReprocessing(
 async function updateCache(
   filePath: string,
   content: string,
-  processedContent: string,
+  processedContent: string
 ) {
   const hash = await getFileHash(content);
   fileCache.set(filePath, { hash, content: processedContent });
@@ -71,7 +70,7 @@ function parseMarkdown(markdown: string): string {
     function (match, scriptContent) {
       scriptBlocks.push(match);
       return `\n\n__SCRIPT_BLOCK_${scriptBlockIndex++}__\n\n`;
-    },
+    }
   );
 
   // Images - ensure proper asset paths with WebP fallback (process before links)
@@ -81,20 +80,21 @@ function parseMarkdown(markdown: string): string {
       // Clean up src path
       let origSrc = src;
       if (
-        !src.startsWith("http") && !src.startsWith("https") &&
-        !src.startsWith("/assets/")
+        !src.startsWith('http') &&
+        !src.startsWith('https') &&
+        !src.startsWith('/assets/')
       ) {
-        origSrc = `/assets/${src.replace(/^\.?\/?/, "")}`;
+        origSrc = `/assets/${src.replace(/^\.?\/?/, '')}`;
       }
 
       // Generate WebP path
       let webpSrc = origSrc;
       // Remove any query/hash from src for webp path
-      webpSrc = webpSrc.replace(/[#?].*$/, "");
-      webpSrc = webpSrc.replace(/\.[^.\/]+$/, ".webp");
+      webpSrc = webpSrc.replace(/[#?].*$/, '');
+      webpSrc = webpSrc.replace(/\.[^.\/]+$/, '.webp');
 
       // Check if WebP file exists in output assets
-      const webpPath = join(outDir, webpSrc.replace(/^\/assets\//, "assets/"));
+      const webpPath = join(outDir, webpSrc.replace(/^\/assets\//, 'assets/'));
       let webpExists = false;
       try {
         // Synchronous check for file existence
@@ -115,7 +115,7 @@ function parseMarkdown(markdown: string): string {
         // If WebP doesn't exist, just use the original image
         return `<img src="${origSrc}" alt="${alt}">`;
       }
-    },
+    }
   );
 
   // Links (process after images to avoid conflicts)
@@ -124,7 +124,7 @@ function parseMarkdown(markdown: string): string {
     (match, text, url) => {
       // Add target="_blank" to all links
       return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
-    },
+    }
   );
 
   // --- CODE BLOCK HANDLING ---
@@ -137,11 +137,11 @@ function parseMarkdown(markdown: string): string {
     /```([^\r\n]+)?\r?\n([\s\S]*?)```/g,
     function (match, language, code) {
       rawCodeBlocks.push({
-        lang: (language ? String(language).trim() : "plaintext"),
+        lang: language ? String(language).trim() : 'plaintext',
         code: code, // preserve as-is
       });
       return `@@CODEBLOCK${rawCodeBlockIndex++}@@`;
-    },
+    }
   );
   // --- END CODE BLOCK HANDLING ---
 
@@ -154,18 +154,19 @@ function parseMarkdown(markdown: string): string {
         !/^@@CODEBLOCK\d+@@$/.test(p2.trim()) &&
         !/^__SCRIPT_BLOCK_\d+__$/.test(p2.trim())
       ) {
-        return `${p1}<pre><code class=\"language-html\">${p2.replace(/</g, "&lt;").replace(/>/g, "&gt;")
-          }</code></pre>`;
+        return `${p1}<pre><code class=\"language-html\">${p2
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')}</code></pre>`;
       }
       return match;
-    },
+    }
   );
 
   // --- NESTED LISTS HANDLING ---
   // We'll process the markdown line by line for lists, then join back for the rest of the regexes
   const lines = markdown.split(/\r?\n/);
   const htmlLines: string[] = [];
-  const listStack: { type: "ul" | "ol"; indent: number }[] = [];
+  const listStack: { type: 'ul' | 'ol'; indent: number }[] = [];
   const listItemRegex = /^([ ]{0,6})([-*]|\d+\.)[ ]+(.*)$/;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -175,11 +176,12 @@ function parseMarkdown(markdown: string): string {
       const marker = match[2];
       const content = match[3];
       const isOrdered = /\d+\./.test(marker);
-      const type = isOrdered ? "ol" : "ul";
+      const type = isOrdered ? 'ol' : 'ul';
 
       // Close lists if we're dedenting
       while (
-        listStack.length > 0 && indent < listStack[listStack.length - 1].indent
+        listStack.length > 0 &&
+        indent < listStack[listStack.length - 1].indent
       ) {
         htmlLines.push(`</${listStack.pop()!.type}>`);
       }
@@ -189,9 +191,10 @@ function parseMarkdown(markdown: string): string {
         indent > listStack[listStack.length - 1].indent
       ) {
         for (
-          let j = listStack.length > 0
-            ? listStack[listStack.length - 1].indent + 1
-            : 0;
+          let j =
+            listStack.length > 0
+              ? listStack[listStack.length - 1].indent + 1
+              : 0;
           j <= indent && j < 3;
           j++
         ) {
@@ -201,7 +204,8 @@ function parseMarkdown(markdown: string): string {
       }
       // If switching between ul/ol at same indent, close and open
       if (
-        listStack.length > 0 && listStack[listStack.length - 1].type !== type &&
+        listStack.length > 0 &&
+        listStack[listStack.length - 1].type !== type &&
         indent === listStack[listStack.length - 1].indent
       ) {
         htmlLines.push(`</${listStack.pop()!.type}>`);
@@ -221,7 +225,7 @@ function parseMarkdown(markdown: string): string {
   while (listStack.length > 0) {
     htmlLines.push(`</${listStack.pop()!.type}>`);
   }
-  markdown = htmlLines.join("\n");
+  markdown = htmlLines.join('\n');
   // --- END NESTED LISTS HANDLING ---
 
   // --- DEFINITION LISTS HANDLING ---
@@ -242,37 +246,42 @@ function parseMarkdown(markdown: string): string {
       if (!inDefinitionList) {
         // Start a new definition list
         inDefinitionList = true;
-        defHtmlLines.push("<dl>");
+        defHtmlLines.push('<dl>');
       }
 
       // Add the definition - preserve line breaks within the definition
       const definition = defMatch[1];
       defHtmlLines.push(`<dd>${definition}</dd>`);
     } else if (
-      trimmedLine && !trimmedLine.startsWith("<") &&
-      !trimmedLine.startsWith(">") &&
-      !trimmedLine.startsWith("#") && !trimmedLine.startsWith("|") &&
-      !trimmedLine.startsWith("-") && !trimmedLine.startsWith("*") &&
-      !trimmedLine.match(/^\d+\./) && !trimmedLine.startsWith("```") &&
-      !trimmedLine.startsWith("---") && !trimmedLine.startsWith("_[") &&
+      trimmedLine &&
+      !trimmedLine.startsWith('<') &&
+      !trimmedLine.startsWith('>') &&
+      !trimmedLine.startsWith('#') &&
+      !trimmedLine.startsWith('|') &&
+      !trimmedLine.startsWith('-') &&
+      !trimmedLine.startsWith('*') &&
+      !trimmedLine.match(/^\d+\./) &&
+      !trimmedLine.startsWith('```') &&
+      !trimmedLine.startsWith('---') &&
+      !trimmedLine.startsWith('_[') &&
       !trimmedLine.match(/^\[\^[^\]]+\]:/)
     ) {
       // This could be a term line (not empty, not HTML, not other markdown elements)
       if (inDefinitionList) {
         // Close the previous definition list
-        defHtmlLines.push("</dl>");
+        defHtmlLines.push('</dl>');
         inDefinitionList = false;
       }
 
       // Check if the next line is a definition
       const nextLine = defLines[i + 1];
-      const nextTrimmed = nextLine ? nextLine.trim() : "";
+      const nextTrimmed = nextLine ? nextLine.trim() : '';
       const nextIsDefinition = nextTrimmed.match(/^:\s+(.+)$/);
 
       if (nextIsDefinition) {
         // This is a term, start a new definition list
         inDefinitionList = true;
-        defHtmlLines.push("<dl>");
+        defHtmlLines.push('<dl>');
         defHtmlLines.push(`<dt>${trimmedLine}</dt>`);
       } else {
         // Not part of a definition list, keep as is
@@ -281,7 +290,7 @@ function parseMarkdown(markdown: string): string {
     } else {
       // Not a definition list element, close any open definition list
       if (inDefinitionList) {
-        defHtmlLines.push("</dl>");
+        defHtmlLines.push('</dl>');
         inDefinitionList = false;
       }
       defHtmlLines.push(line);
@@ -290,40 +299,45 @@ function parseMarkdown(markdown: string): string {
 
   // Close any remaining open definition list
   if (inDefinitionList) {
-    defHtmlLines.push("</dl>");
+    defHtmlLines.push('</dl>');
   }
 
-  markdown = defHtmlLines.join("\n");
+  markdown = defHtmlLines.join('\n');
   // --- END DEFINITION LISTS HANDLING ---
 
   // --- TABLES HANDLING ---
   // Convert markdown tables to HTML tables before other regexes
-  markdown = markdown.replace(/((?:^\|.*\|.*\n)+)/gm, (block) => {
+  markdown = markdown.replace(/((?:^\|.*\|.*\n)+)/gm, block => {
     // Only process if block looks like a table (at least 2 lines, starts with |, has --- separator)
     const lines = block.trim().split(/\r?\n/);
     if (lines.length < 2) return block;
     if (
-      !lines[0].startsWith("|") ||
-      !lines[1].replace(/\s/g, "").match(/^\|?[-:|]+\|?$/)
-    ) return block;
+      !lines[0].startsWith('|') ||
+      !lines[1].replace(/\s/g, '').match(/^\|?[-:|]+\|?$/)
+    )
+      return block;
     // Parse header
-    const headerCells = lines[0].split("|").slice(1, -1).map((cell) =>
-      cell.trim()
-    );
+    const headerCells = lines[0]
+      .split('|')
+      .slice(1, -1)
+      .map(cell => cell.trim());
     // Parse rows
-    const rows = lines.slice(2).map((row) =>
-      row.split("|").slice(1, -1).map((cell) => cell.trim())
+    const rows = lines.slice(2).map(row =>
+      row
+        .split('|')
+        .slice(1, -1)
+        .map(cell => cell.trim())
     );
-    let html = "<table><thead><tr>";
+    let html = '<table><thead><tr>';
     for (const cell of headerCells) html += `<th>${cell}</th>`;
-    html += "</tr></thead><tbody>";
+    html += '</tr></thead><tbody>';
     for (const row of rows) {
-      if (row.length === 0 || (row.length === 1 && row[0] === "")) continue;
-      html += "<tr>";
+      if (row.length === 0 || (row.length === 1 && row[0] === '')) continue;
+      html += '<tr>';
       for (const cell of row) html += `<td>${cell}</td>`;
-      html += "</tr>";
+      html += '</tr>';
     }
-    html += "</tbody></table>";
+    html += '</tbody></table>';
     return `<div class="table-responsive">${html}</div>`;
   });
   // --- END TABLES HANDLING ---
@@ -332,11 +346,11 @@ function parseMarkdown(markdown: string): string {
   // Convert markdown task list items to HTML checkboxes
   markdown = markdown.replace(
     /<li>\s*\[x\]\s*(.*?)<\/li>/gi,
-    '<li class="task-list-item"><input type="checkbox" checked disabled> $1</li>',
+    '<li class="task-list-item"><input type="checkbox" checked disabled> $1</li>'
   );
   markdown = markdown.replace(
     /<li>\s*\[ \]\s*(.*?)<\/li>/gi,
-    '<li class="task-list-item"><input type="checkbox" disabled> $1</li>',
+    '<li class="task-list-item"><input type="checkbox" disabled> $1</li>'
   );
   // --- END TASK LISTS HANDLING ---
 
@@ -347,18 +361,18 @@ function parseMarkdown(markdown: string): string {
     /^\\_\[(.+?)\]:\s*(.+)$/gm,
     (match, abbr, def) => {
       abbrevDefs[abbr] = def;
-      return "";
-    },
+      return '';
+    }
   );
   // Replace abbreviation references with <abbr> elements
-  Object.keys(abbrevDefs).forEach((abbr) => {
+  Object.keys(abbrevDefs).forEach(abbr => {
     const regex = new RegExp(
-      `\\b${abbr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
-      "gi",
+      `\\b${abbr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
+      'gi'
     );
     markdown = markdown.replace(
       regex,
-      `<abbr title="${abbrevDefs[abbr]}">${abbr}</abbr>`,
+      `<abbr title="${abbrevDefs[abbr]}">${abbr}</abbr>`
     );
   });
   // --- END ABBREVIATIONS HANDLING ---
@@ -370,8 +384,8 @@ function parseMarkdown(markdown: string): string {
     /^\[\^([^\]]+)\]:\s*(.+)$/gm,
     (match, name, def) => {
       footnoteDefs[name] = def.trim();
-      return "";
-    },
+      return '';
+    }
   );
 
   // Also handle footnote definitions that might be at the end of content
@@ -381,8 +395,8 @@ function parseMarkdown(markdown: string): string {
       if (!footnoteDefs[name]) {
         footnoteDefs[name] = def.trim();
       }
-      return "";
-    },
+      return '';
+    }
   );
 
   // Replace footnote references with numbered links (but not definitions)
@@ -405,133 +419,133 @@ function parseMarkdown(markdown: string): string {
   markdown = markdown
     // Headers - allow for leading whitespace and add anchor links
     .replace(/^\s*###### (.*$)/gim, (match, title) => {
-      const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
-        /^-+|-+$/g,
-        "",
-      );
+      const id = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
       return `<h6 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h6>`;
     })
     .replace(/^\s*##### (.*$)/gim, (match, title) => {
-      const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
-        /^-+|-+$/g,
-        "",
-      );
+      const id = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
       return `<h5 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h5>`;
     })
     .replace(/^\s*#### (.*$)/gim, (match, title) => {
-      const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
-        /^-+|-+$/g,
-        "",
-      );
+      const id = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
       return `<h4 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h4>`;
     })
     .replace(/^\s*### (.*$)/gim, (match, title) => {
-      const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
-        /^-+|-+$/g,
-        "",
-      );
+      const id = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
       return `<h3 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h3>`;
     })
     .replace(/^\s*## (.*$)/gim, (match, title) => {
-      const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
-        /^-+|-+$/g,
-        "",
-      );
+      const id = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
       return `<h2 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h2>`;
     })
     .replace(/^\s*# (.*$)/gim, (match, title) => {
-      const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
-        /^-+|-+$/g,
-        "",
-      );
+      const id = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
       return `<h1 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h1>`;
     })
     // Bold
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     // Italic (both asterisk and underscore)
-    .replace(/\*(.*?)\*/g, "<em>$1</em>")
-    .replace(/_(.*?)_/g, "<em>$1</em>")
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/_(.*?)_/g, '<em>$1</em>')
     // Strikethrough
-    .replace(/~~(.*?)~~/g, "<del>$1</del>")
+    .replace(/~~(.*?)~~/g, '<del>$1</del>')
     // Inline code (but not inside code block placeholders)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
     // Multi-line blockquotes (process before paragraph wrapping)
-    .replace(/((?:^\s*> .*$\n?)+)/gm, (match) => {
+    .replace(/((?:^\s*> .*$\n?)+)/gm, match => {
       const lines = match.trim().split(/\r?\n/);
       const content = lines
-        .map((line) => line.replace(/^\s*> ?/, "")) // Remove > and leading spaces
-        .filter((line) => line.trim() !== "") // Remove empty lines
-        .join(" ");
+        .map(line => line.replace(/^\s*> ?/, '')) // Remove > and leading spaces
+        .filter(line => line.trim() !== '') // Remove empty lines
+        .join(' ');
       return `<blockquote>${content}</blockquote>`;
     })
     // Horizontal rules (---) - process before paragraph wrapping
-    .replace(/^[ ]*---[ ]*$/gm, "<hr>")
+    .replace(/^[ ]*---[ ]*$/gm, '<hr>')
     // Line breaks - be more selective about when to add <br> tags
-    .replace(/\n\n/g, "</p><p>")
+    .replace(/\n\n/g, '</p><p>')
     // Only add <br> for single newlines that are not between list items or other block elements
     .replace(
       /(?<!<\/li>)\n(?!<[uo]l>|<li>|<\/[uo]l>|<dl>|<dt>|<dd>|<\/dl>|<table>|<thead>|<tbody>|<tr>|<th>|<td>|<\/table>|<\/thead>|<\/tbody>|<\/tr>|<\/th>|<\/td>|<div|<\/div>|<h[1-6]>|<\/h[1-6]>|<p>|<\/p>|<blockquote>|<\/blockquote>|<hr>|<pre>|<\/pre>|<code>|<\/code>|<strong>|<\/strong>|<em>|<\/em>|<del>|<\/del>|<a\b|<\/a>|<img\b|<\/img>|<abbr>|<\/abbr>|<sup>|<\/sup>|<span>|<\/span>)/g,
-      "<br>",
+      '<br>'
     )
     // Wrap in paragraphs (exclude HTML elements, blockquotes, and code block placeholders)
-    .replace(/^(?!<[^>]*>)(?!> )(?!@@CODEBLOCK\d+@@)(.*)$/gm, "<p>$1</p>")
+    .replace(/^(?!<[^>]*>)(?!> )(?!@@CODEBLOCK\d+@@)(.*)$/gm, '<p>$1</p>')
     // Clean up empty paragraphs
-    .replace(/<p><\/p>/g, "")
-    .replace(/<p><br><\/p>/g, "")
+    .replace(/<p><\/p>/g, '')
+    .replace(/<p><br><\/p>/g, '')
     // Remove <br> tags from definition descriptions
     .replace(/<dd>(.*?)<\/dd>/g, (match, content) => {
-      return `<dd>${content.replace(/<br>/g, " ")}</dd>`;
+      return `<dd>${content.replace(/<br>/g, ' ')}</dd>`;
     })
     // Clean up <br> tags around definition list elements
-    .replace(/<br>\s*<dl>/g, "<dl>")
-    .replace(/<\/dl>\s*<br>/g, "</dl>")
-    .replace(/<br>\s*<dt>/g, "<dt>")
-    .replace(/<\/dt>\s*<br>/g, "</dt>")
-    .replace(/<br>\s*<dd>/g, "<dd>")
-    .replace(/<\/dd>\s*<br>/g, "</dd>")
+    .replace(/<br>\s*<dl>/g, '<dl>')
+    .replace(/<\/dl>\s*<br>/g, '</dl>')
+    .replace(/<br>\s*<dt>/g, '<dt>')
+    .replace(/<\/dt>\s*<br>/g, '</dt>')
+    .replace(/<br>\s*<dd>/g, '<dd>')
+    .replace(/<\/dd>\s*<br>/g, '</dd>')
     // Remove <br> tags that are inside HTML elements
-    .replace(/(<[^>]+>)([^<]*?)<br>([^<]*?)(<\/[^>]+>)/g, "$1$2 $3$4")
+    .replace(/(<[^>]+>)([^<]*?)<br>([^<]*?)(<\/[^>]+>)/g, '$1$2 $3$4')
     // Additional cleanup for blog cards and other HTML structures
     .replace(/<br>\s*<div class="blog-card">/g, '<div class="blog-card">')
-    .replace(/<\/div>\s*<br>/g, "</div>")
+    .replace(/<\/div>\s*<br>/g, '</div>')
     .replace(
       /<br>\s*<div class="blog-card-header">/g,
-      '<div class="blog-card-header">',
+      '<div class="blog-card-header">'
     )
     .replace(
       /<br>\s*<div class="blog-card-meta">/g,
-      '<div class="blog-card-meta">',
+      '<div class="blog-card-meta">'
     )
     .replace(
       /<br>\s*<div class="blog-card-tags">/g,
-      '<div class="blog-card-tags">',
+      '<div class="blog-card-tags">'
     )
     .replace(
       /<br>\s*<h3 class="blog-card-title">/g,
-      '<h3 class="blog-card-title">',
+      '<h3 class="blog-card-title">'
     )
     .replace(/<br>\s*<a class="blog-card-link">/g, '<a class="blog-card-link">')
     .replace(
       /<br>\s*<span class="blog-card-date">/g,
-      '<span class="blog-card-date">',
+      '<span class="blog-card-date">'
     )
     .replace(
       /<br>\s*<span class="blog-card-author">/g,
-      '<span class="blog-card-author">',
+      '<span class="blog-card-author">'
     )
     .replace(
       /<br>\s*<span class="blog-card-tag">/g,
-      '<span class="blog-card-tag">',
+      '<span class="blog-card-tag">'
     )
     .replace(
       /<br>\s*<p class="blog-card-excerpt">/g,
-      '<p class="blog-card-excerpt">',
+      '<p class="blog-card-excerpt">'
     )
     // Remove <br> tags that appear between HTML elements
-    .replace(/>\s*<br>\s*</g, "> <")
+    .replace(/>\s*<br>\s*</g, '> <')
     // Remove <br> tags at the beginning or end of HTML elements
-    .replace(/<br>\s*>/g, ">")
-    .replace(/>\s*<br>/g, ">");
+    .replace(/<br>\s*>/g, '>')
+    .replace(/>\s*<br>/g, '>');
 
   // Replace code block placeholders with simple pre/code blocks AFTER all other processing
   markdown = markdown.replace(/@@CODEBLOCK(\d+)@@/g, (match, index) => {
@@ -540,31 +554,32 @@ function parseMarkdown(markdown: string): string {
 
     // Sanitize the code content to prevent XSS
     const sanitizedCode = block.code
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#x27;");
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;');
 
     // Normalize common language identifiers for Prism
     const rawLang = block.lang.toLowerCase().trim();
     const language = ((): string => {
       switch (rawLang) {
-        case "cs":
-        case "c#":
-          return "csharp";
-        case "ts":
-          return "typescript";
-        case "js":
-          return "javascript";
-        case "yml":
-          return "yaml";
+        case 'cs':
+        case 'c#':
+          return 'csharp';
+        case 'ts':
+          return 'typescript';
+        case 'js':
+          return 'javascript';
+        case 'yml':
+          return 'yaml';
         default:
-          return rawLang || "plaintext";
+          return rawLang || 'plaintext';
       }
     })();
-    const uniqueId = `code-${Date.now()}-${Math.random().toString(36).substr(2, 9)
-      }`;
+    const uniqueId = `code-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
 
     return `<div class="code-block-container" data-language="${language}" id="${uniqueId}">
             <div class="code-block-header">
@@ -584,9 +599,10 @@ function parseMarkdown(markdown: string): string {
   markdown = markdown.replace(
     /\{\{htmlcode\}\}([\s\S]*?)\{\{\/htmlcode\}\}/g,
     (match, code) => {
-      return `<pre><code class=\"language-html\">${code.replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        }</code></pre>`;
-    },
+      return `<pre><code class=\"language-html\">${code
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')}</code></pre>`;
+    }
   );
 
   return markdown;
@@ -621,6 +637,77 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
     <!-- KaTeX for math rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <style>
+        /* Back to Top Button */
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 48px;
+            height: 48px;
+            background: #1a1a1a;
+            color: #ffffff;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease, background-color 0.3s ease, color 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .back-to-top:active {
+            transform: translateY(0);
+        }
+
+        .back-to-top:focus {
+            outline: 2px solid currentColor;
+            outline-offset: 2px;
+        }
+
+        .back-to-top.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .back-to-top svg {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+        }
+
+        [data-theme="dark"] .back-to-top {
+            background: #e5e5e5;
+            color: #1a1a1a;
+        }
+
+        [data-theme="dark"] .back-to-top:hover {
+            box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
+        }
+
+        @media (max-width: 768px) {
+            .back-to-top {
+                bottom: 1.5rem;
+                right: 1.5rem;
+                width: 44px;
+                height: 44px;
+            }
+
+            .back-to-top svg {
+                width: 20px;
+                height: 20px;
+            }
+        }
+    </style>
    </head>
 <body>
     {{component:navbar}}
@@ -911,12 +998,56 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
                 });
             });
         });
+
+        // Back to Top Button
+        (function() {
+            const button = document.createElement('button');
+            button.className = 'back-to-top';
+            button.setAttribute('aria-label', 'Back to top');
+            button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>';
+            document.body.appendChild(button);
+
+            const scrollThreshold = 300;
+
+            function checkScrollPosition() {
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                if (scrollTop > scrollThreshold) {
+                    button.classList.add('visible');
+                } else {
+                    button.classList.remove('visible');
+                }
+            }
+
+            function scrollToTop() {
+                window.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+            }
+
+            // Scroll event listener
+            window.addEventListener('scroll', checkScrollPosition, { passive: true });
+
+            // Click event listener
+            button.addEventListener('click', scrollToTop);
+
+            // Keyboard navigation
+            button.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    scrollToTop();
+                }
+            });
+
+            // Initial check
+            checkScrollPosition();
+        })();
 </script>
     </body>
     </html>`;
 
 // Component placeholder and defaults
-const NAVBAR_COMPONENT_PLACEHOLDER = "{{component:navbar}}";
+const NAVBAR_COMPONENT_PLACEHOLDER = '{{component:navbar}}';
 const DEFAULT_NAVBAR_HTML = `<nav class="navbar">
         <div class="navbar-container">
             <a href="/" class="navbar-brand"><picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture><span class="navbar-brand-text">Nergy's Blog</span></a>
@@ -948,182 +1079,20 @@ async function loadComponentHtml(name: string): Promise<string> {
     return content;
   } catch {
     switch (name) {
-      case "navbar":
+      case 'navbar':
         return DEFAULT_NAVBAR_HTML;
       default:
-        return "";
+        return '';
     }
   }
-}
-
-// Helper: Convert JS object to Lua table string
-function jsToLuaTable(obj: any): string {
-  if (Array.isArray(obj)) {
-    let out = "{";
-    for (let i = 0; i < obj.length; i++) {
-      const v = obj[i];
-      if (typeof v === "object" && v !== null) {
-        out += jsToLuaTable(v);
-      } else if (typeof v === "string") {
-        out += '"' + v.replace(/"/g, '\\"') + '"';
-      } else {
-        out += String(v);
-      }
-      if (i < obj.length - 1) out += ", ";
-    }
-    out += "}";
-    return out;
-  } else if (typeof obj === "object" && obj !== null) {
-    let out = "{";
-    for (const [k, v] of Object.entries(obj)) {
-      out += `["${k}"] = `;
-      if (typeof v === "object" && v !== null) {
-        out += jsToLuaTable(v);
-      } else if (typeof v === "string") {
-        out += '"' + v.replace(/"/g, '\\"') + '"';
-      } else {
-        out += String(v);
-      }
-      out += ", ";
-    }
-    out += "}";
-    return out;
-  } else if (typeof obj === "string") {
-    return '"' + obj.replace(/"/g, '\\"') + '"';
-  } else {
-    return String(obj);
-  }
-}
-
-// Lua interpolation system
-export interface LuaInterpolation {
-  script: string;
-  params?: string[];
-  fullMatch: string;
-}
-
-export function parseLuaInterpolations(content: string): LuaInterpolation[] {
-  const interpolations: LuaInterpolation[] = [];
-
-  // Match patterns like {{lua:script_name}} or {{lua:script_name:param1,param2}}
-  const regex = /\{\{lua:([^:}]+)(?::([^}]+))?\}\}/g;
-  let match;
-
-  while ((match = regex.exec(content)) !== null) {
-    interpolations.push({
-      script: match[1].trim(),
-      params: match[2] ? match[2].split(",").map((p) => p.trim()) : undefined,
-      fullMatch: match[0],
-    });
-  }
-
-  return interpolations;
-}
-
-function isHttpUrl(pathOrUrl: string): boolean {
-  try {
-    const u = new URL(pathOrUrl);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-async function loadLuaScriptContent(baseDirOrUrl: string, relativeName: string): Promise<string> {
-  if (isHttpUrl(baseDirOrUrl)) {
-    const url = new URL(relativeName, baseDirOrUrl).toString();
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch ${url}: ${res.status}`);
-    }
-    return await res.text();
-  }
-  const fullPath = join(baseDirOrUrl, relativeName);
-  return await Deno.readTextFile(fullPath);
-}
-
-export async function executeLuaScript(
-  scriptName: string,
-  params?: string[],
-): Promise<string> {
-  try {
-    // Load target script contents from filesystem or URL
-    const targetScriptContent = await loadLuaScriptContent(
-      luaDir,
-      `${scriptName}.lua`,
-    );
-
-    // Create a temporary Lua script that embeds the target script
-    let tempLuaScript = `${targetScriptContent}\n`;
-
-    // If the script has a main function, call it with parameters
-    if (params && params.length > 0) {
-      tempLuaScript += `\n-- Call main function with parameters\n`;
-      tempLuaScript += `if main then\n`;
-      tempLuaScript += `  local result = main(${params.map((p) => `"${p}"`).join(", ")
-        })\n`;
-      tempLuaScript += `  if result then\n`;
-      tempLuaScript += `    print(result)\n`;
-      tempLuaScript += `  end\n`;
-      tempLuaScript += `end\n`;
-    } else {
-      // If no parameters, just execute the script and capture any output
-      tempLuaScript += `\n-- Script executed without parameters\n`;
-    }
-
-    // Write temporary script
-    const tempFile = `temp_interp_${Date.now()}_${Math.random().toString(36).substr(2, 9)
-      }.lua`;
-    await Deno.writeTextFile(tempFile, tempLuaScript);
-
-    // Execute Lua script
-    const process = new Deno.Command("lua", {
-      args: [tempFile],
-      stdout: "piped",
-      stderr: "piped",
-    });
-
-    const { code, stdout, stderr } = await process.output();
-    const output = new TextDecoder().decode(stdout);
-    const error = new TextDecoder().decode(stderr);
-
-    // Clean up temp file
-    await Deno.remove(tempFile);
-
-    if (code !== 0) {
-      console.error(`Lua interpolation error for ${scriptName}:`, error);
-      return `[Lua Error: ${scriptName}]`;
-    }
-
-    return output.trim();
-  } catch (error) {
-    console.error(`Lua script not found or failed: ${scriptName}.lua`);
-    return `[Lua Script Not Found: ${scriptName}]`;
-  }
-}
-
-export async function processLuaInterpolations(
-  content: string,
-): Promise<string> {
-  const interpolations = parseLuaInterpolations(content);
-
-  for (const interpolation of interpolations) {
-    const result = await executeLuaScript(
-      interpolation.script,
-      interpolation.params,
-    );
-    content = content.replace(interpolation.fullMatch, result);
-  }
-
-  return content;
 }
 
 // Process TOC marker and replace with dynamic content cards
 async function processTOCMarker(
   content: string,
-  filePath: string,
+  filePath: string
 ): Promise<string> {
-  const marker = "{{routes:toc}}";
+  const marker = '{{routes:toc}}';
   if (!content.includes(marker)) {
     return content;
   }
@@ -1133,7 +1102,7 @@ async function processTOCMarker(
   const directory = dirname(relativePath);
 
   // Only process TOC for index.md files in subdirectories
-  if (!filePath.endsWith("/index.md") || directory === ".") {
+  if (!filePath.endsWith('/index.md') || directory === '.') {
     return content;
   }
 
@@ -1152,34 +1121,37 @@ async function processTOCMarker(
     // Scan target directory for markdown files (excluding index.md)
     for await (const entry of Deno.readDir(targetDir)) {
       if (
-        entry.isFile && entry.name.endsWith(".md") && entry.name !== "index.md"
+        entry.isFile &&
+        entry.name.endsWith('.md') &&
+        entry.name !== 'index.md'
       ) {
         const entryPath = join(targetDir, entry.name);
         const content = await Deno.readTextFile(entryPath);
         const meta = await extractMetadata(content);
 
         // Extract excerpt (first paragraph after frontmatter)
-        let excerpt = "";
-        if (content.startsWith("---")) {
-          const endIndex = content.indexOf("---", 3);
+        let excerpt = '';
+        if (content.startsWith('---')) {
+          const endIndex = content.indexOf('---', 3);
           if (endIndex !== -1) {
             const markdownContent = content.substring(endIndex + 3).trim();
-            const firstParagraph = markdownContent.split("\n\n")[0];
+            const firstParagraph = markdownContent.split('\n\n')[0];
             // Remove markdown formatting for excerpt
-            excerpt = firstParagraph
-              .replace(/^#+\s*/, "") // Remove headers
-              .replace(/\*\*(.*?)\*\*/g, "$1") // Remove bold
-              .replace(/\*(.*?)\*/g, "$1") // Remove italic
-              .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Remove links
-              .substring(0, 150) + (firstParagraph.length > 150 ? "..." : "");
+            excerpt =
+              firstParagraph
+                .replace(/^#+\s*/, '') // Remove headers
+                .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold
+                .replace(/\*(.*?)\*/g, '$1') // Remove italic
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links
+                .substring(0, 150) + (firstParagraph.length > 150 ? '...' : '');
           }
         }
 
-        const filename = basename(entry.name, ".md");
+        const filename = basename(entry.name, '.md');
         posts.push({
-          title: meta.title || filename.replace(/-/g, " ").replace(/_/g, " "),
-          date: meta.date || "",
-          author: meta.author || "",
+          title: meta.title || filename.replace(/-/g, ' ').replace(/_/g, ' '),
+          date: meta.date || '',
+          author: meta.author || '',
           tags: meta.tags || [],
           excerpt,
           filename,
@@ -1203,71 +1175,82 @@ async function processTOCMarker(
     });
 
     // Generate cards HTML based on directory type
-    let cardsHTML = "";
+    let cardsHTML = '';
 
-    if (directory === "blogs") {
+    if (directory === 'blogs') {
       // Blog-style cards with metadata
-      cardsHTML = posts.map((post) =>
-        `<div class="blog-card">
+      cardsHTML = posts
+        .map(
+          post =>
+            `<div class="blog-card">
     <a href="${post.url}" class="blog-card-link-wrapper">
         <div class="blog-card-header">
             <h3 class="blog-card-title">${post.title}</h3>
             <div class="blog-card-meta">
                 <span class="blog-card-date">${post.date}</span>
-                ${post.author
-          ? `<span class="blog-card-author">by ${post.author}</span>`
-          : ""
-        }
+                ${
+                  post.author
+                    ? `<span class="blog-card-author">by ${post.author}</span>`
+                    : ''
+                }
             </div>
         </div>
-        ${post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ""
+        ${
+          post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ''
         }
-        ${post.tags.length > 0
-          ? `<div class="blog-card-tags">
-            ${post.tags.map((tag) =>
-            `<span class="blog-card-tag">${tag}</span>`
-          ).join("")
-          }
+        ${
+          post.tags.length > 0
+            ? `<div class="blog-card-tags">
+            ${post.tags
+              .map(tag => `<span class="blog-card-tag">${tag}</span>`)
+              .join('')}
         </div>`
-          : ""
+            : ''
         }
     </a>
 </div>`
-      ).join("");
+        )
+        .join('');
     } else {
       // Generic content cards for other directories
-      cardsHTML = posts.map((post) =>
-        `<div class="content-card">
+      cardsHTML = posts
+        .map(
+          post =>
+            `<div class="content-card">
     <a href="${post.url}" class="content-card-link-wrapper">
         <div class="content-card-header">
             <h3 class="content-card-title">${post.title}</h3>
-            ${post.date
-          ? `<div class="content-card-meta">
+            ${
+              post.date
+                ? `<div class="content-card-meta">
                 <span class="content-card-date">${post.date}</span>
-                ${post.author
-            ? `<span class="content-card-author">by ${post.author}</span>`
-            : ""
-          }
+                ${
+                  post.author
+                    ? `<span class="content-card-author">by ${post.author}</span>`
+                    : ''
+                }
             </div>`
-          : ""
-        }
+                : ''
+            }
         </div>
-        ${post.excerpt
-          ? `<p class="content-card-excerpt">${post.excerpt}</p>`
-          : ""
+        ${
+          post.excerpt
+            ? `<p class="content-card-excerpt">${post.excerpt}</p>`
+            : ''
         }
-        ${post.tags.length > 0
-          ? `<div class="content-card-tags">
-            ${post.tags.map((tag) =>
-            `<span class="content-card-tag">${tag}</span>`
-          ).join("")
-          }
+        ${
+          post.tags.length > 0
+            ? `<div class="content-card-tags">
+            ${post.tags
+              .map(tag => `<span class="content-card-tag">${tag}</span>`)
+              .join('')}
         </div>`
-          : ""
+            : ''
         }
     </a>
 </div>`
-      ).join("");
+        )
+        .join('');
     }
 
     // Replace marker with generated cards
@@ -1276,70 +1259,46 @@ async function processTOCMarker(
     console.error(`❌ Error processing TOC marker for ${filePath}:`, error);
     return content.replace(
       marker,
-      `<p>Error loading content from ${directory}.</p>`,
+      `<p>Error loading content from ${directory}.</p>`
     );
   }
 }
 
-// Process Lua template if it exists
-async function processLuaTemplate(
+// Process TypeScript template if it exists
+async function processTemplate(
   mdPath: string,
   content: string,
-  meta: Record<string, any>,
+  meta: Record<string, any>
 ): Promise<string> {
-  const luaPath = templatePath;
-
   try {
-    const luaFile = await Deno.readTextFile(luaPath);
-
-    // Create a temporary Lua script that processes the content
-    const tempLuaScript = `
-${luaFile}
-
--- Call the render function if it exists
-if render then
-  result = render([[
-${content}
-]], {
-    meta = ${jsToLuaTable(meta)},
-    path = "${mdPath}"
-})
-else
-  result = [[
-${content}
-]]
-end
-
-print(result)
-`;
-
-    // Write temporary script
-    const safePath = mdPath.replace(/[^a-zA-Z0-9]/g, "_");
-    const tempFile = `temp_${Date.now()}_${safePath}.lua`;
-    await Deno.writeTextFile(tempFile, tempLuaScript);
-
-    // Execute Lua script
-    const process = new Deno.Command("lua", {
-      args: [tempFile],
-      stdout: "piped",
-      stderr: "piped",
-    });
-
-    const { code, stdout, stderr } = await process.output();
-    const output = new TextDecoder().decode(stdout);
-    const error = new TextDecoder().decode(stderr);
-
-    // Clean up temp file
-    await Deno.remove(tempFile);
-
-    if (code !== 0) {
-      console.error(`Lua error for ${mdPath}:`, error);
-      return content;
+    // Convert relative path to absolute file:// URL for import
+    let templateUrl: string;
+    if (
+      templatePath.startsWith('http://') ||
+      templatePath.startsWith('https://') ||
+      templatePath.startsWith('file://')
+    ) {
+      templateUrl = templatePath;
+    } else {
+      // Resolve relative path to absolute path
+      const absolutePath = join(Deno.cwd(), templatePath.replace(/^\.\//, ''));
+      templateUrl = `file://${absolutePath}`;
     }
 
-    return output.trim();
+    // Dynamically import the template module
+    const templateModule = await import(templateUrl);
+
+    if (templateModule.render && typeof templateModule.render === 'function') {
+      return templateModule.render(content, {
+        meta,
+        path: mdPath,
+      });
+    }
+
+    // If render function doesn't exist, return original content
+    return content;
   } catch (error) {
-    // If Lua file doesn't exist or fails, return original content
+    // If template file doesn't exist or fails, return original content
     return content;
   }
 }
@@ -1368,31 +1327,21 @@ async function processMarkdownFile(filePath: string): Promise<PageData> {
   const meta = await extractMetadata(content);
   let markdownContent = content;
 
-  if (content.startsWith("---")) {
-    const endIndex = content.indexOf("---", 3);
+  if (content.startsWith('---')) {
+    const endIndex = content.indexOf('---', 3);
     if (endIndex !== -1) {
       markdownContent = content.substring(endIndex + 3).trim();
     }
   }
 
-  // Process Lua interpolations in the markdown content
-  const interpolatedContent = await processLuaInterpolations(markdownContent);
-
   // Process TOC marker if present
-  const tocProcessedContent = await processTOCMarker(
-    interpolatedContent,
-    filePath,
-  );
+  const tocProcessedContent = await processTOCMarker(markdownContent, filePath);
 
-  // Parse markdown to HTML (after interpolation and TOC processing)
+  // Parse markdown to HTML (after TOC processing)
   const htmlContent = parseMarkdown(tocProcessedContent);
 
-  // Process with Lua template if available
-  const processedContent = await processLuaTemplate(
-    filePath,
-    htmlContent,
-    meta,
-  );
+  // Process with TypeScript template if available
+  const processedContent = await processTemplate(filePath, htmlContent, meta);
 
   // Update cache
   await updateCache(filePath, content, processedContent);
@@ -1408,24 +1357,22 @@ async function processMarkdownFile(filePath: string): Promise<PageData> {
 async function extractMetadata(content: string): Promise<Record<string, any>> {
   const meta: Record<string, any> = {};
 
-  if (content.startsWith("---")) {
-    const endIndex = content.indexOf("---", 3);
+  if (content.startsWith('---')) {
+    const endIndex = content.indexOf('---', 3);
     if (endIndex !== -1) {
       const frontmatter = content.substring(3, endIndex).trim();
 
       // Simple YAML-like parsing
-      for (const line of frontmatter.split("\n")) {
-        const colonIndex = line.indexOf(":");
+      for (const line of frontmatter.split('\n')) {
+        const colonIndex = line.indexOf(':');
         if (colonIndex !== -1) {
           const key = line.substring(0, colonIndex).trim();
           const value = line.substring(colonIndex + 1).trim();
 
           // Handle YAML arrays like [tag1, tag2]
-          if (value.startsWith("[") && value.endsWith("]")) {
+          if (value.startsWith('[') && value.endsWith(']')) {
             const arrayContent = value.substring(1, value.length - 1);
-            const arrayItems = arrayContent.split(",").map((item) =>
-              item.trim()
-            );
+            const arrayItems = arrayContent.split(',').map(item => item.trim());
             meta[key] = arrayItems;
           } else {
             meta[key] = value;
@@ -1441,7 +1388,7 @@ async function extractMetadata(content: string): Promise<Record<string, any>> {
 // Helper function to check if WebP logo exists
 function checkWebPLogoExists(): boolean {
   try {
-    const webpPath = join(outDir, "assets/nemic-logos/logo.webp");
+    const webpPath = join(outDir, 'assets/nemic-logos/logo.webp');
     const stat = Deno.statSync(webpPath);
     return stat.isFile;
   } catch {
@@ -1458,7 +1405,7 @@ async function generateHTML(
   let html = DEFAULT_TEMPLATE;
 
   // Inject components (navbar)
-  const navbarHtml = await loadComponentHtml("navbar");
+  const navbarHtml = await loadComponentHtml('navbar');
   html = html.replace(NAVBAR_COMPONENT_PLACEHOLDER, navbarHtml);
 
   // Check if WebP logo exists and replace the logo HTML accordingly
@@ -1467,39 +1414,30 @@ async function generateHTML(
     // WebP exists, use picture element with WebP source
     html = html.replace(
       '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture>',
-      '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture>',
+      '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture>'
     );
   } else {
     // WebP doesn't exist, use just the original image
     html = html.replace(
       '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"><span class="navbar-brand-text">Nergy\'s Blog</span>',
-      '<img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"><span class="navbar-brand-text">Nergy\'s Blog</span>',
+      '<img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"><span class="navbar-brand-text">Nergy\'s Blog</span>'
     );
   }
 
   // Replace template variables
-  html = html.replace("{{title}}", meta.title + " | Nergy" || "Nergy's Blog");
-  html = html.replace("{{content}}", content);
-  html = html.replace("{{navigation}}", navigation);
+  html = html.replace('{{title}}', meta.title + ' | Nergy' || "Nergy's Blog");
+  html = html.replace('{{content}}', content);
+  html = html.replace('{{navigation}}', navigation);
 
-  // Add Lua WASM runtime script, Runtime Lua utility, and Prism.js scripts
+  // Add Prism.js scripts for syntax highlighting
   const additionalScripts = `
-    <script type="application/lua" data-module="render-time">
--- Simple render time module for backward compatibility
-local os = require("os")
-local format = "iso"
-return os.date("!%Y-%m-%dT%H:%M:%SZ")
-    </script>
-
-    <!-- Dynamic content loader for server-side Lua execution -->
-    <script defer src="/assets/dynamic-content.js"></script>
     <!-- Prism.js for syntax highlighting -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
     `;
 
-  html = html.replace("</head>", additionalScripts + "</head>");
+  html = html.replace('</head>', additionalScripts + '</head>');
 
   return html;
 }
@@ -1511,12 +1449,13 @@ async function generateNavigation(): Promise<NavItem[]> {
 
   try {
     for await (const entry of Deno.readDir(routesDir)) {
-      if (entry.isFile && entry.name.endsWith(".md")) {
-        const fileName = basename(entry.name, ".md");
-        if (fileName !== "index") {
+      if (entry.isFile && entry.name.endsWith('.md')) {
+        const fileName = basename(entry.name, '.md');
+        if (fileName !== 'index') {
           navItems.push({
-            title: fileName.charAt(0).toUpperCase() +
-              fileName.slice(1).replace(/_/g, " "),
+            title:
+              fileName.charAt(0).toUpperCase() +
+              fileName.slice(1).replace(/_/g, ' '),
             url: `/${fileName}`,
           });
         }
@@ -1526,20 +1465,22 @@ async function generateNavigation(): Promise<NavItem[]> {
 
         // Scan subdirectory for markdown files
         try {
-          for await (
-            const subEntry of Deno.readDir(join(routesDir, folderName))
-          ) {
+          for await (const subEntry of Deno.readDir(
+            join(routesDir, folderName)
+          )) {
             if (
-              subEntry.isFile && subEntry.name.endsWith(".md") &&
-              subEntry.name !== "index.md"
+              subEntry.isFile &&
+              subEntry.name.endsWith('.md') &&
+              subEntry.name !== 'index.md'
             ) {
-              const fileName = basename(subEntry.name, ".md");
+              const fileName = basename(subEntry.name, '.md');
               const filePath = join(routesDir, folderName, subEntry.name);
 
               // Read file content to extract metadata
-              let date = "";
-              let title = fileName.charAt(0).toUpperCase() +
-                fileName.slice(1).replace(/_/g, " ").replace(/-/g, " ");
+              let date = '';
+              let title =
+                fileName.charAt(0).toUpperCase() +
+                fileName.slice(1).replace(/_/g, ' ').replace(/-/g, ' ');
 
               try {
                 const content = await Deno.readTextFile(filePath);
@@ -1581,8 +1522,9 @@ async function generateNavigation(): Promise<NavItem[]> {
 
         if (children.length > 0) {
           navItems.push({
-            title: folderName.charAt(0).toUpperCase() +
-              folderName.slice(1).replace(/_/g, " "),
+            title:
+              folderName.charAt(0).toUpperCase() +
+              folderName.slice(1).replace(/_/g, ' '),
             url: `/${folderName}`,
             children,
           });
@@ -1590,7 +1532,7 @@ async function generateNavigation(): Promise<NavItem[]> {
       }
     }
   } catch (error) {
-    console.error("❌ Could not read routes directory for navigation");
+    console.error('❌ Could not read routes directory for navigation');
   }
 
   return navItems;
@@ -1599,27 +1541,30 @@ async function generateNavigation(): Promise<NavItem[]> {
 // Generate navigation HTML
 function generateNavigationHTML(
   navItems: NavItem[],
-  currentPath: string = "",
+  currentPath: string = ''
 ): string {
-  let html = "";
+  let html = '';
 
   for (const item of navItems) {
     if (item.children && item.children.length > 0) {
       // Check if current page is in this dropdown
-      const isActive = currentPath === item.url ||
-        item.children.some((child) => currentPath === child.url);
-      const activeClass = isActive ? " active" : "";
+      const isActive =
+        currentPath === item.url ||
+        item.children.some(child => currentPath === child.url);
+      const activeClass = isActive ? ' active' : '';
 
       // Dropdown menu
       html += `<li class="nav-item nav-dropdown${activeClass}">`;
-      html += `<button type="button" class="nav-link nav-dropdown-toggle${isActive ? " active" : ""
-        }">${item.title}</button>`;
+      html += `<button type="button" class="nav-link nav-dropdown-toggle${
+        isActive ? ' active' : ''
+      }">${item.title}</button>`;
       html += `<div class="nav-dropdown-content">`;
 
       // Add "see all" item at the top of the dropdown
       const isSeeAllActive = currentPath === item.url;
-      html += `<a href="${item.url}" class="nav-dropdown-item${isSeeAllActive ? " active" : ""
-        }">See All ${item.title}</a>`;
+      html += `<a href="${item.url}" class="nav-dropdown-item${
+        isSeeAllActive ? ' active' : ''
+      }">See All ${item.title}</a>`;
 
       // Add separator
       html += `<div class="nav-dropdown-separator"></div>`;
@@ -1627,17 +1572,19 @@ function generateNavigationHTML(
       // Add child items
       for (const child of item.children) {
         const isChildActive = currentPath === child.url;
-        html += `<a href="${child.url}" class="nav-dropdown-item${isChildActive ? " active" : ""
-          }">${child.title}</a>`;
+        html += `<a href="${child.url}" class="nav-dropdown-item${
+          isChildActive ? ' active' : ''
+        }">${child.title}</a>`;
       }
       html += `</div>`;
       html += `</li>`;
     } else {
       // Regular link
       const isActive = currentPath === item.url;
-      html += `<li class="nav-item${isActive ? " active" : ""}">`;
-      html += `<a href="${item.url}" class="nav-link${isActive ? " active" : ""
-        }">${item.title}</a>`;
+      html += `<li class="nav-item${isActive ? ' active' : ''}">`;
+      html += `<a href="${item.url}" class="nav-link${
+        isActive ? ' active' : ''
+      }">${item.title}</a>`;
       html += `</li>`;
     }
   }
@@ -1647,13 +1594,13 @@ function generateNavigationHTML(
 
 // Copy assets (non-image files)
 async function copyAssets(): Promise<void> {
-  const distAssetsDir = join(outDir, "assets");
+  const distAssetsDir = join(outDir, 'assets');
 
   try {
     await ensureDir(distAssetsDir);
 
     // Copy all assets recursively, including images
-    async function copyAssetRecursively(dir: string, basePath: string = "") {
+    async function copyAssetRecursively(dir: string, basePath: string = '') {
       try {
         for await (const entry of Deno.readDir(dir)) {
           const sourcePath = join(dir, entry.name);
@@ -1675,17 +1622,17 @@ async function copyAssets(): Promise<void> {
     }
 
     await copyAssetRecursively(assetsDir);
-    console.log("✅ All assets copied to dist/assets/");
+    console.log('✅ All assets copied to dist/assets/');
   } catch (error) {
-    console.log("ℹ️  No assets directory found");
+    console.log('ℹ️  No assets directory found');
   }
 
   // Always copy favicon.ico to dist root
   try {
-    await copy(join(assetsDir, "favicon.ico"), join(outDir, "favicon.ico"), {
+    await copy(join(assetsDir, 'favicon.ico'), join(outDir, 'favicon.ico'), {
       overwrite: true,
     });
-    console.log("✅ favicon.ico copied to dist/");
+    console.log('✅ favicon.ico copied to dist/');
   } catch (error) {
     // Ignore if not present
   }
@@ -1693,12 +1640,12 @@ async function copyAssets(): Promise<void> {
 
 // Optimize images to WebP format using optimizt
 async function optimizeImages(): Promise<void> {
-  const distAssetsDir = join(outDir, "assets");
+  const distAssetsDir = join(outDir, 'assets');
 
   // Find all image files recursively
   const imageFiles: Array<{ fullPath: string; relativePath: string }> = [];
 
-  async function findImages(dir: string, basePath: string = "") {
+  async function findImages(dir: string, basePath: string = '') {
     try {
       for await (const entry of Deno.readDir(dir)) {
         const fullPath = join(dir, entry.name);
@@ -1707,14 +1654,7 @@ async function optimizeImages(): Promise<void> {
         if (entry.isFile) {
           const ext = extname(entry.name).toLowerCase();
           if (
-            [
-              ".png",
-              ".jpg",
-              ".jpeg",
-              ".gif",
-              ".bmp",
-              ".tiff",
-            ].includes(ext)
+            ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'].includes(ext)
           ) {
             imageFiles.push({ fullPath, relativePath });
           }
@@ -1732,7 +1672,7 @@ async function optimizeImages(): Promise<void> {
     await findImages(assetsDir);
 
     if (imageFiles.length === 0) {
-      console.log("ℹ️  No image files found to optimize");
+      console.log('ℹ️  No image files found to optimize');
       return;
     }
 
@@ -1741,10 +1681,10 @@ async function optimizeImages(): Promise<void> {
     // Check if optimizt is available
     let optimiztAvailable = false;
     try {
-      const process = new Deno.Command("optimizt", {
-        args: ["--help"],
-        stdout: "piped",
-        stderr: "piped",
+      const process = new Deno.Command('optimizt', {
+        args: ['--help'],
+        stdout: 'piped',
+        stderr: 'piped',
       });
       const { code } = await process.output();
       optimiztAvailable = code === 0;
@@ -1753,7 +1693,7 @@ async function optimizeImages(): Promise<void> {
     }
 
     if (!optimiztAvailable) {
-      console.log("⚠️  optimizt not found, skipping webp optimization");
+      console.log('⚠️  optimizt not found, skipping webp optimization');
       return;
     }
 
@@ -1762,7 +1702,7 @@ async function optimizeImages(): Promise<void> {
       try {
         const outputPath = join(
           distAssetsDir,
-          relativePath.replace(/\.[^.]+$/, ".webp"),
+          relativePath.replace(/\.[^.]+$/, '.webp')
         );
 
         // Skip if already optimized and up-to-date in dist
@@ -1785,38 +1725,34 @@ async function optimizeImages(): Promise<void> {
         await ensureDir(dirname(outputPath));
 
         // Run optimizt to create WebP version
-        const process = new Deno.Command("optimizt", {
-          args: [
-            fullPath,
-            "--webp",
-            "--force",
-          ],
-          stdout: "piped",
-          stderr: "piped",
+        const process = new Deno.Command('optimizt', {
+          args: [fullPath, '--webp', '--force'],
+          stdout: 'piped',
+          stderr: 'piped',
         });
 
         const { code, stderr } = await process.output();
 
         // Move the generated .webp to dist/assets
-        const webpSource = fullPath.replace(/\.[^.]+$/, ".webp");
+        const webpSource = fullPath.replace(/\.[^.]+$/, '.webp');
         if (code === 0) {
           try {
             await copy(webpSource, outputPath, { overwrite: true });
             console.log(
-              `✅ Optimized ${relativePath} → ${basename(outputPath)}`,
+              `✅ Optimized ${relativePath} → ${basename(outputPath)}`
             );
             // Optionally remove the .webp from source
             await Deno.remove(webpSource);
           } catch (err) {
             console.error(
-              `❌ Failed to move/copy webp: ${webpSource} to ${outputPath}`,
+              `❌ Failed to move/copy webp: ${webpSource} to ${outputPath}`
             );
           }
         } else {
           const error = new TextDecoder().decode(stderr);
           console.error(
             `❌ Failed to optimize ${relativePath}:`,
-            error.toString(),
+            error.toString()
           );
         }
       } catch (error) {
@@ -1824,10 +1760,10 @@ async function optimizeImages(): Promise<void> {
       }
     }
 
-    console.log("✅ Image optimization complete!");
+    console.log('✅ Image optimization complete!');
     // No need to update HTML references
   } catch (error) {
-    console.log("ℹ️  Image optimization failed");
+    console.log('ℹ️  Image optimization failed');
   }
 }
 
@@ -1850,14 +1786,15 @@ function startBuildTimer() {
 
 function logBuildMetrics() {
   const totalTime = performance.now() - buildMetrics.startTime;
-  const avgProcessingTime = buildMetrics.processedFiles > 0
-    ? Array.from(buildMetrics.fileProcessingTimes.values()).reduce(
-      (a, b) => a + b,
-      0,
-    ) / buildMetrics.processedFiles
-    : 0;
+  const avgProcessingTime =
+    buildMetrics.processedFiles > 0
+      ? Array.from(buildMetrics.fileProcessingTimes.values()).reduce(
+          (a, b) => a + b,
+          0
+        ) / buildMetrics.processedFiles
+      : 0;
 
-  console.log("\n📊 Build Performance Metrics:");
+  console.log('\n📊 Build Performance Metrics:');
   console.log(`⏱️  Total build time: ${totalTime.toFixed(2)}ms`);
   console.log(`📁 Total files: ${buildMetrics.totalFiles}`);
   console.log(`⚡ Cached files: ${buildMetrics.cachedFiles}`);
@@ -1870,7 +1807,7 @@ function logBuildMetrics() {
       .sort(([, a], [, b]) => b - a)
       .slice(0, 3);
 
-    console.log("\n🐌 Slowest files:");
+    console.log('\n🐌 Slowest files:');
     sortedFiles.forEach(([file, time]) => {
       console.log(`  ${file}: ${time.toFixed(2)}ms`);
     });
@@ -1879,27 +1816,27 @@ function logBuildMetrics() {
 
 // Main build function
 async function build(): Promise<void> {
-  console.log("🚀 Starting build...");
+  console.log('🚀 Starting build...');
   startBuildTimer();
 
   // Ensure dist directory exists
   await ensureDir(outDir);
 
   // Generate navigation
-  console.log("🧭 Generating navigation...");
+  console.log('🧭 Generating navigation...');
   const navItems = await generateNavigation();
   const navigationHTML = generateNavigationHTML(navItems);
-  console.log("Navigation items:", navItems);
-  console.log("Navigation HTML:", navigationHTML);
+  console.log('Navigation items:', navItems);
+  console.log('Navigation HTML:', navigationHTML);
 
   // Find all markdown files in routes (including subdirectories)
   const routesDir = contentDir;
   const markdownFiles: string[] = [];
 
-  async function scanDirectory(dir: string, basePath: string = "") {
+  async function scanDirectory(dir: string, basePath: string = '') {
     try {
       for await (const entry of Deno.readDir(dir)) {
-        if (entry.isFile && entry.name.endsWith(".md")) {
+        if (entry.isFile && entry.name.endsWith('.md')) {
           const relativePath = join(basePath, entry.name);
           markdownFiles.push(join(dir, entry.name));
         } else if (entry.isDirectory) {
@@ -1916,12 +1853,12 @@ async function build(): Promise<void> {
   try {
     await scanDirectory(routesDir);
   } catch (error) {
-    console.error("❌ Routes directory not found.");
+    console.error('❌ Routes directory not found.');
     return;
   }
 
   if (markdownFiles.length === 0) {
-    console.log("ℹ️  No markdown files found in routes/");
+    console.log('ℹ️  No markdown files found in routes/');
     return;
   }
 
@@ -1929,7 +1866,7 @@ async function build(): Promise<void> {
   console.log(`📝 Processing ${markdownFiles.length} markdown files...`);
   buildMetrics.totalFiles = markdownFiles.length;
 
-  const processingPromises = markdownFiles.map(async (filePath) => {
+  const processingPromises = markdownFiles.map(async filePath => {
     const startTime = performance.now();
     console.log(`📝 Processing ${filePath}...`);
 
@@ -1937,13 +1874,13 @@ async function build(): Promise<void> {
       const pageData = await processMarkdownFile(filePath);
 
       // Determine current path for active navigation
-      const fileName = basename(filePath, ".md");
-      const relativePath = relative(contentDir, filePath).replace(".md", "");
-      let currentPath = "";
+      const fileName = basename(filePath, '.md');
+      const relativePath = relative(contentDir, filePath).replace('.md', '');
+      let currentPath = '';
 
-      if (fileName === "index") {
-        if (relativePath === "index") {
-          currentPath = "/";
+      if (fileName === 'index') {
+        if (relativePath === 'index') {
+          currentPath = '/';
         } else {
           // index.md in a subdirectory
           currentPath = `/${dirname(relativePath)}`;
@@ -1969,13 +1906,13 @@ async function build(): Promise<void> {
       // Determine output path
       let outputPath;
 
-      if (fileName === "index") {
-        if (relativePath === "index") {
-          outputPath = join(outDir, "index.html");
+      if (fileName === 'index') {
+        if (relativePath === 'index') {
+          outputPath = join(outDir, 'index.html');
         } else {
           // index.md in a subdirectory
           const dirName = dirname(relativePath);
-          outputPath = join(outDir, dirName, "index.html");
+          outputPath = join(outDir, dirName, 'index.html');
         }
       } else {
         if (relativePath === fileName) {
@@ -2010,52 +1947,52 @@ async function build(): Promise<void> {
   const results = await Promise.all(processingPromises);
 
   // Log summary
-  const successful = results.filter((r) => r.success).length;
-  const failed = results.filter((r) => !r.success).length;
+  const successful = results.filter(r => r.success).length;
+  const failed = results.filter(r => !r.success).length;
   console.log(
-    `📊 Build summary: ${successful} files processed successfully, ${failed} failed`,
+    `📊 Build summary: ${successful} files processed successfully, ${failed} failed`
   );
 
   // Copy assets and optimize images
-  console.log("📁 Copying assets...");
+  console.log('📁 Copying assets...');
   await copyAssets();
 
   // Copy serve.ts to dist for independent execution
-  console.log("🚀 Copying and patching serve.ts to dist...");
+  console.log('🚀 Copying and patching serve.ts to dist...');
   try {
-    let serveSrc = await Deno.readTextFile("./serve.ts");
+    let serveSrc = await Deno.readTextFile('./serve.ts');
     // Patch fsRoot: "./dist" to fsRoot: "."
     serveSrc = serveSrc.replace('fsRoot: "./dist"', 'fsRoot: "."');
     // Patch specific Deno.readTextFile calls - be more precise
     serveSrc = serveSrc.replace(
       /Deno\.readTextFile\("\.\/dist" \+ htmlPath\)/g,
-      "Deno.readTextFile(htmlPath.slice(1))",
+      'Deno.readTextFile(htmlPath.slice(1))'
     );
     serveSrc = serveSrc.replace(
       /const indexPath = "\.\/dist\/index\.html";/g,
-      'const indexPath = "index.html";',
+      'const indexPath = "index.html";'
     );
     serveSrc = serveSrc.replace(
       /const indexContent = await Deno\.readTextFile\(indexPath\);/g,
-      "const indexContent = await Deno.readTextFile(indexPath);",
+      'const indexContent = await Deno.readTextFile(indexPath);'
     );
-    await Deno.writeTextFile(join(outDir, "serve.ts"), serveSrc);
-    console.log("✅ serve.ts copied and patched to dist/");
+    await Deno.writeTextFile(join(outDir, 'serve.ts'), serveSrc);
+    console.log('✅ serve.ts copied and patched to dist/');
   } catch (error) {
-    console.error("❌ Failed to copy/patch serve.ts:", error);
+    console.error('❌ Failed to copy/patch serve.ts:', error);
   }
 
-  console.log("🖼️  Optimizing images...");
+  console.log('🖼️  Optimizing images...');
   await optimizeImages();
 
   // Log performance metrics
   logBuildMetrics();
 
   // Clean up WebP files
-  console.log("🧹 Cleaning up WebP files...");
+  console.log('🧹 Cleaning up WebP files...');
   // await cleanupWebpFiles(); // This line is removed as per the edit hint
 
-  console.log("🎉 Build complete!");
+  console.log('🎉 Build complete!');
 }
 
 // Run build if this script is executed directly

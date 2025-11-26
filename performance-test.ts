@@ -112,23 +112,7 @@ benchmark.addTest("Server Response", async () => {
   }
 });
 
-// Test 3: Lua Script Execution
-benchmark.addTest("Lua Script Execution", async () => {
-  try {
-    const { LuaFactory } = await import("npm:wasmoon@1.16.0");
-    const factory = new LuaFactory();
-    const lua = await factory.createEngine();
-
-    await lua.doString(`
-            local os = require("os")
-            return os.date("!%Y-%m-%dT%H:%M:%SZ")
-        `);
-  } catch {
-    // Lua might not be available, that's okay for testing
-  }
-});
-
-// Test 4: Markdown Processing (simulated)
+// Test 3: Markdown Processing (simulated)
 benchmark.addTest("Markdown Processing", async () => {
   const sampleMarkdown = `
 # Test Document

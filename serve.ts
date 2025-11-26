@@ -2,35 +2,12 @@
 
 import { serveDir } from "jsr:@std/http/file-server";
 import { extname, join } from "jsr:@std/path";
-import { LuaFactory } from "npm:wasmoon@1.16.0";
 
 // Get port from command line arguments or use default
 const portArg = Deno.args.find((arg) => arg.startsWith("--port="));
 const port = portArg ? parseInt(portArg.split("=")[1]) : 8000;
 const rootArg = Deno.args.find((arg) => arg.startsWith("--root="));
 const ROOT = rootArg ? rootArg.split("=")[1] : "./dist";
-const luaDirArg = Deno.args.find((arg) => arg.startsWith("--luaDir="));
-const LUA_DIR = luaDirArg ? luaDirArg.split("=")[1] : "./lua-scripts/";
-
-function isHttpUrl(pathOrUrl: string): boolean {
-  try {
-    const u = new URL(pathOrUrl);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-async function readLuaFile(relativeName: string): Promise<string> {
-  const base = LUA_DIR;
-  if (isHttpUrl(base)) {
-    const url = new URL(relativeName, base).toString();
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
-    return await res.text();
-  }
-  return await Deno.readTextFile(join(base, relativeName));
-}
 
 // Performance optimizations: Response cache
 const responseCache = new Map<
@@ -159,232 +136,22 @@ Deno.serve({ port }, async (req: Request) => {
   const url = new URL(req.url);
   const path = url.pathname;
 
-  // Check cache first (only for API endpoints)
+  // Handle requests to removed Lua endpoints
   if (path.startsWith("/lua-scripts/")) {
-    const cachedResponse = getCachedResponse(path);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-  }
-
-  // API endpoint for current time with format parameter
-  if (path.startsWith("/lua-scripts/time/")) {
-    try {
-      const format = path.split("/").pop() || "iso";
-      const allowedFormats = [
-        "iso",
-        "local",
-        "utc",
-        "date",
-        "time",
-        "datetime",
-        "friendly",
-      ];
-
-      if (!allowedFormats.includes(format)) {
-        const response = new Response(
-          JSON.stringify({ error: `Invalid format: ${format}` }),
-          {
-            status: 400,
-            headers: {
-              "content-type": "application/json",
-              "cache-control": "no-cache, no-store, must-revalidate",
-            },
-          },
-        );
-        return response;
-      }
-
-      // Read and execute the current_time.lua script
-      const luaScript = await readLuaFile("current_time.lua");
-
-      // Use WASMOON for secure execution
-      const factory = new LuaFactory();
-      const lua = await factory.createEngine();
-
-      // Execute the script and call main function with format parameter
-      const result = await lua.doString(
-        luaScript + `\nreturn main("${format}")`,
-      );
-      const response = new Response(JSON.stringify({ time: result }), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-          "cache-control": "no-cache, no-store, must-revalidate", // No cache for dynamic time
-        },
-      });
-      return response;
-    } catch (err) {
-      console.error("Time API error:", err);
-      const response = new Response(
-        JSON.stringify({ error: "Time generation failed" }),
-        {
-          status: 500,
-          headers: {
-            "content-type": "application/json",
-            "cache-control": "no-cache, no-store, must-revalidate",
-          },
-        },
-      );
-      return response;
-    }
-  }
-
-  // API endpoint for executing Lua modules (SECURE VERSION)
-  if (path === "/lua-scripts/lua-execute" && req.method === "POST") {
-    try {
-      const body = await req.json();
-      const { module, context } = body;
-
-      // SECURITY: Only allow specific modules that correspond to existing Lua scripts
-      const allowedModules = [
-        "render-time",
-        "current-time",
-        "counter",
-        "random-quote",
-        "time-module",
-      ];
-      if (!allowedModules.includes(module)) {
-        const response = new Response(
-          JSON.stringify({ error: `Module '${module}' not allowed` }),
-          {
-            status: 403,
-            headers: {
-              "content-type": "application/json",
-              "cache-control": "no-cache, no-store, must-revalidate",
-            },
-          },
-        );
-        return response;
-      }
-
-      // SECURITY: Validate and sanitize context
-      const sanitizedContext: {
-        format?: string;
-        timezone?: string;
-        prefix?: string;
-        count?: number;
-      } = {};
-      if (context && typeof context === "object") {
-        if (module === "render-time" || module === "current-time") {
-          const allowedFormats = [
-            "iso",
-            "local",
-            "utc",
-            "date",
-            "time",
-            "datetime",
-            "friendly",
-          ];
-          const allowedTimezones = ["utc", "local"];
-
-          if (context.format && allowedFormats.includes(context.format)) {
-            sanitizedContext.format = context.format;
-          }
-          if (context.timezone && allowedTimezones.includes(context.timezone)) {
-            sanitizedContext.timezone = context.timezone;
-          }
-        } else if (module === "counter") {
-          if (
-            context.prefix && typeof context.prefix === "string" &&
-            context.prefix.length <= 50
-          ) {
-            sanitizedContext.prefix = context.prefix;
-          }
-          if (
-            context.count && typeof context.count === "number" &&
-            context.count >= 1 && context.count <= 100
-          ) {
-            sanitizedContext.count = context.count;
-          }
-        } else if (module === "time-module") {
-          // no extra validation
-        }
-      }
-
-      // SECURITY: Use existing Lua scripts from lua-scripts directory
-      let luaScript = "";
-      let scriptPath = "";
-
-      if (module === "render-time" || module === "current-time") {
-        scriptPath = "current_time.lua";
-        const format = sanitizedContext.format || "iso";
-        luaScript = await readLuaFile(scriptPath);
-        luaScript += `\nreturn main("${format}")`;
-      } else if (module === "counter") {
-        scriptPath = "counter.lua";
-        const prefix = sanitizedContext.prefix || "Item";
-        const count = sanitizedContext.count || 3;
-        luaScript = await readLuaFile(scriptPath);
-        luaScript += `\nreturn main("${prefix}", ${count})`;
-      } else if (module === "random-quote") {
-        scriptPath = "random_quote.lua";
-        luaScript = await readLuaFile(scriptPath);
-        luaScript += `\nreturn main()`;
-      } else if (module === "time-module") {
-        scriptPath = "time_module.lua";
-        luaScript = await readLuaFile(scriptPath);
-        luaScript +=
-          `\nreturn { get_current_time = get_current_time, get_timestamp = get_timestamp, get_time_components = get_time_components }`;
-      }
-
-      // Use WASMOON to execute Lua code securely in memory
-      let result = "";
-      try {
-        const factory = new LuaFactory();
-        const lua = await factory.createEngine();
-        result = await lua.doString(luaScript);
-      } catch (err) {
-        console.error("Lua execution error:", err);
-        const response = new Response(
-          JSON.stringify({ error: "Execution failed" }),
-          {
-            status: 500,
-            headers: {
-              "content-type": "application/json",
-              "cache-control": "no-cache, no-store, must-revalidate",
-            },
-          },
-        );
-        return response;
-      }
-
-      if (typeof result === "string" && result.length > 1000) {
-        const response = new Response(
-          JSON.stringify({ error: "Output too large" }),
-          {
-            status: 413,
-            headers: {
-              "content-type": "application/json",
-              "cache-control": "no-cache, no-store, must-revalidate",
-            },
-          },
-        );
-        return response;
-      }
-
-      const response = new Response(JSON.stringify({ result }), {
-        status: 200,
+    const response = new Response(
+      JSON.stringify({
+        error: "Lua functionality has been removed. This project now uses pure TypeScript.",
+        message: "Please update your client-side code to remove references to /lua-scripts/ endpoints.",
+      }),
+      {
+        status: 410, // Gone - indicates the resource is no longer available
         headers: {
           "content-type": "application/json",
           "cache-control": "no-cache, no-store, must-revalidate",
         },
-      });
-      return response;
-    } catch (err) {
-      console.error("Lua API error:", err);
-      const response = new Response(
-        JSON.stringify({ error: "Internal server error" }),
-        {
-          status: 500,
-          headers: {
-            "content-type": "application/json",
-            "cache-control": "no-cache, no-store, must-revalidate",
-          },
-        },
-      );
-      return response;
-    }
+      },
+    );
+    return response;
   }
 
   // Try to serve clean URLs like /about as /about.html
