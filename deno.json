@@ -1,7 +1,8 @@
 {
   "name": "@nergy101/astrodon",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "license": "MIT",
+  "description": "A tiny Deno static site toolkit. Build markdown with TypeScript-powered templates, and serve the output with a minimal dev server.",
   "exports": "./mod.ts",
   "tasks": {
     "benchmark": "deno run --allow-read --allow-write --allow-run --allow-net performance-test.ts",
@@ -20,6 +21,10 @@
       "template.ts",
       "README.md",
       "LICENSE"
-    ]
+    ],
+    "compatibility": {
+      "deno": "^1.40.0",
+      "bun": "^1.0.0"
+    }
   }
 }

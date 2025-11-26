@@ -1,14 +1,14 @@
 # Astrodon
 
-Astrodon is a tiny Deno + Lua static site toolkit. Build markdown with optional Lua-powered interpolation, and serve the output with a minimal dev server. Keep your site simple, fast, and readable.
+Astrodon is a tiny Deno static site toolkit. Build markdown with TypeScript-powered templates, and serve the output with a minimal dev server. Keep your site simple, fast, and readable.
 
 See my blog for example usage: https://github.com/Nergy101/blog
 
 ## Quick start
 
-1. Install Deno 1.40+ and (optionally) Lua 5.1+
+1. Install Deno 1.40+
 
-2. Create `deno.json` with JSR import + tasks (Blog-style)
+2. Create `deno.json` with JSR import + tasks
 
 ```json
 {
@@ -18,7 +18,7 @@ See my blog for example usage: https://github.com/Nergy101/blog
     "dev": "deno task build && deno task serve"
   },
   "imports": {
-    "astrodon": "jsr:@nergy101/astrodon@0.1.6"
+    "astrodon": "jsr:@nergy101/astrodon@0.2.1"
   }
 }
 ```
@@ -34,6 +34,7 @@ await build({
   outDir: new URL('./dist', import.meta.url).pathname,
   assetsDir: new URL('./assets', import.meta.url).pathname, // optional
   componentsDir: new URL('./components', import.meta.url).pathname, // optional
+  template: new URL('./template.ts', import.meta.url).pathname, // optional
 });
 ```
 
@@ -57,72 +58,74 @@ deno task serve
 # open http://localhost:8000
 ```
 
+Or use the combined dev task:
+
+```bash
+deno task dev
+```
+
 ## Project layout (consumer)
 
 ```
 my-site/
 ├─ routes/               # Markdown content
 ├─ components/           # HTML partials (header, footer, nav, etc.)
-├─ lua-scripts/          # Optional Lua scripts
 ├─ assets/               # Static files
 ├─ dist/                 # Build output
 ├─ build.ts
 ├─ serve.ts
+├─ template.ts           # Optional TypeScript template
 └─ deno.json
 ```
 
-## Markdown + Lua interpolation
+## Markdown features
 
-Write markdown and embed dynamic bits using `{{lua:...}}`. Results are computed at build-time.
+Astrodon supports standard markdown with frontmatter metadata:
 
 ```markdown
 ---
 title: Welcome
+date: 2024-01-01
+author: Your Name
+tags: [blog, welcome]
 ---
 
 # Hello
 
-Generated on {{lua:current_time:friendly}}
-
-Steps: {{lua:counter:Step,3}}
-
-Quote: {{lua:random_quote}}
+This is a markdown file with frontmatter metadata.
 ```
 
-Built‑in scripts:
+### Supported markdown features
 
-- current_time: `iso`, `friendly`, `local`, `date`, `time`, `unix`
-- counter: `{{lua:counter:Label,count}}`
-- random_quote: `{{lua:random_quote}}`
+- Headers with anchor links
+- Code blocks with syntax highlighting (Prism.js)
+- Tables
+- Task lists
+- Footnotes
+- Definition lists
+- Blockquotes
+- Images (with automatic WebP optimization)
+- Links (external links open in new tabs)
 
-Create your own in `lua-scripts/*.lua` with a `main(...)` function that returns a string.
+### Table of Contents
 
-```lua
--- lua-scripts/example.lua
-function main(label, n)
-  label = label or "Item"
-  n = tonumber(n) or 3
-  local out = {}
-  for i=1,n do out[i] = label .. " " .. i end
-  return table.concat(out, ", ")
-end
-```
+Use `{{routes:toc}}` in an `index.md` file within a subdirectory to automatically generate a table of contents with cards for all markdown files in that directory.
 
-## Runtime Lua APIs (dev server)
+### Custom templates
 
-When using the dev server, you can also fetch dynamic values at runtime (as used in the Blog):
+Create a `template.ts` file to customize how your content is rendered:
 
-- `GET /lua-scripts/time/:format` → `{ "time": string }`
-  - **format**: `iso | local | utc | date | time | datetime | friendly`
-- `POST /lua-scripts/lua-execute` → `{ "result": string }`
-  - body: `{ "module": "render-time|current-time|counter|random-quote|time-module", "context": { ... } }`
+```ts
+export interface RenderContext {
+  meta: Record<string, any>;
+  path: string;
+}
 
-Example (client):
-
-```js
-const res = await fetch('/lua-scripts/time/friendly');
-const { time } = await res.json();
-document.querySelector('#dynamic-time').textContent = time;
+export function render(content: string, context: RenderContext): string {
+  const { meta } = context;
+  // Customize the rendered HTML
+  return `<div class="custom-wrapper">${content}</div>`;
+}
 ```
 
 ## Optional image optimization
@@ -155,15 +158,16 @@ Use `optimization.config.json` if you want simple tuning:
 
 ## Custom components
 
-Within the /Components folder you can create custom templates for:
+Within the `components/` folder you can create custom HTML templates for:
 
-- navbar.html
+- `navbar.html` - Navigation bar component
 
 ## Troubleshooting
 
-- Missing Lua: `brew install lua` (or your OS package manager)
 - Images not showing: check files in `assets/` and rebuild
 - Custom port: `deno run -A serve.ts --port=5000`
+- Build errors: ensure all required directories exist (`routes/`, `assets/`, etc.)
+- Template not working: check that `template.ts` exports a `render` function with the correct signature
 
 ## License
 
