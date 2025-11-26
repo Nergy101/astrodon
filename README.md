@@ -80,19 +80,78 @@ my-site/
 
 ## Markdown features
 
-Astrodon supports standard markdown with frontmatter metadata:
+Astrodon supports standard markdown with frontmatter metadata. Frontmatter is a YAML-like block at the top of your markdown file that provides metadata about the page.
+
+### Frontmatter metadata
+
+Frontmatter is enclosed between `---` delimiters at the beginning of your markdown file. All fields are optional and can be accessed in your templates via the `meta` object.
+
+**Common frontmatter fields:**
+
+- `title` - Page title (used in HTML `<title>` tag and navigation)
+- `date` - Publication date (used for sorting blog posts and content cards)
+- `author` - Author name (displayed in metadata sections)
+- `tags` - Array of tags (used for categorization and filtering)
+
+**Example:**
 
 ```markdown
 ---
-title: Welcome
-date: 2024-01-01
-author: Your Name
-tags: [blog, welcome]
+title: Welcome to Astrodon
+date: 2024-01-15
+author: John Doe
+tags: [getting-started, tutorial, astrodon]
 ---
 
 # Hello
 
 This is a markdown file with frontmatter metadata.
+```
+
+**Custom fields:**
+
+You can add any custom fields to frontmatter - they'll all be available in your template's `meta` object:
+
+```markdown
+---
+title: Advanced Guide
+custom_field: Custom value
+category: advanced
+draft: false
+---
+
+Content here...
+```
+
+**Array syntax:**
+
+Tags and other arrays can be written in YAML array syntax:
+
+```markdown
+---
+tags: [tag1, tag2, tag3]
+# or
+tags:
+  - tag1
+  - tag2
+  - tag3
+---
+```
+
+**Accessing metadata in templates:**
+
+All frontmatter fields are available in your `template.ts` render function:
+
+```ts
+export function render(content: string, context: RenderContext): string {
+  const { meta } = context;
+  // Access any frontmatter field
+  const title = meta.title;
+  const tags = meta.tags; // Array
+  const custom = meta.custom_field;
+
+  return content;
+}
 ```
 
 ### Supported markdown features
@@ -110,6 +169,60 @@ This is a markdown file with frontmatter metadata.
 ### Table of Contents
 
 Use `{{routes:toc}}` in an `index.md` file within a subdirectory to automatically generate a table of contents with cards for all markdown files in that directory.
+
+**File structure example:**
+
+```
+routes/
+├── index.md                    # Homepage
+├── about.md                    # About page
+└── blogs/                      # Blog directory
+    ├── index.md                # Blog index (uses {{routes:toc}})
+    ├── getting-started.md      # Blog post
+    ├── advanced-guide.md       # Blog post
+    └── tips-and-tricks.md      # Blog post
+```
+
+**Example `routes/blogs/index.md`:**
+
+```markdown
+---
+title: Blog
+---
+
+# My Blog
+
+Welcome to my blog! Here are all my posts:
+
+{{routes:toc}}
+```
+
+The `{{routes:toc}}` marker will be automatically replaced with cards for all markdown files in the `blogs/` directory (excluding `index.md` itself). Each card includes:
+
+- **Title** - From the `title` frontmatter field or filename
+- **Date** - From the `date` frontmatter field (if present)
+- **Author** - From the `author` frontmatter field (if present)
+- **Excerpt** - First paragraph of the content (auto-generated)
+- **Tags** - From the `tags` frontmatter array (if present)
+
+**Blog post example (`routes/blogs/getting-started.md`):**
+
+```markdown
+---
+title: Getting Started with Astrodon
+date: 2024-01-15
+author: John Doe
+tags: [tutorial, getting-started]
+---
+
+# Getting Started
+
+This is the first paragraph that will be used as the excerpt in the table of contents card.
+
+More content here...
+```
+
+**Note:** The `{{routes:toc}}` marker only works in `index.md` files within subdirectories. It will not work in the root `index.md` file.
 
 ### Custom templates
 
