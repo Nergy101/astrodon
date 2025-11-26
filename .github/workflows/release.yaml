@@ -153,6 +153,14 @@ jobs:
           deno task test
           echo "✅ All tests passed - version verified"
 
+      - name: Commit version update
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add deno.json
+          git commit -m "chore: bump version to ${{ steps.parse_tag.outputs.VERSION }}" || echo "No changes to commit"
+          echo "✅ Version update committed"
+
       - name: Generate changelog
         id: changelog
         run: |
@@ -254,7 +262,7 @@ jobs:
         if: github.event_name == 'push' || github.event.inputs.publish_to_jsr == 'true'
         run: |
           echo "📦 Publishing to JSR..."
-          npx jsr publish
+          npx jsr publish --allow-dirty
           echo "✅ Successfully published to JSR"
 
       - name: Create Release
