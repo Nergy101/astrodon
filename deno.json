@@ -21,10 +21,10 @@
       "template.ts",
       "README.md",
       "LICENSE"
-    ],
-    "compatibility": {
-      "deno": "^1.40.0",
-      "bun": "^1.0.0"
-    }
+    ]
+  },
+  "compatibility": {
+    "deno": "^1.40.0",
+    "bun": "^1.0.0"
   }
 }
