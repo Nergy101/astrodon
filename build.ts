@@ -105,12 +105,9 @@ function parseMarkdown(markdown: string): string {
         webpExists = false;
       }
 
-      // Create picture element with WebP and original fallback, only if WebP exists
+      // Use WebP directly if it exists, otherwise use original
       if (webpExists) {
-        return `<picture>
-                <source srcset="${webpSrc}" type="image/webp">
-                <img src="${origSrc}" alt="${alt}">
-            </picture>`;
+        return `<img src="${webpSrc}" alt="${alt}">`;
       } else {
         // If WebP doesn't exist, just use the original image
         return `<img src="${origSrc}" alt="${alt}">`;
@@ -604,6 +601,84 @@ function parseMarkdown(markdown: string): string {
         .replace(/>/g, '&gt;')}</code></pre>`;
     }
   );
+
+  // Process existing HTML <img> tags (not already in <picture> elements) to add WebP support
+  // First, protect img tags that are already inside picture elements
+  const pictureImgPattern =
+    /<picture>[\s\S]*?<img\s+[^>]*?>[\s\S]*?<\/picture>/gi;
+  const protectedImages: string[] = [];
+  markdown = markdown.replace(pictureImgPattern, match => {
+    protectedImages.push(match);
+    return `__PROTECTED_IMG_${protectedImages.length - 1}__`;
+  });
+
+  // Now process remaining img tags
+  markdown = markdown.replace(/<img\s+([^>]*?)>/gi, (match, attrs) => {
+    // Extract src attribute from attrs (handle both single and double quotes, case insensitive)
+    const srcMatch = attrs.match(/src=["']([^"']+)["']/i);
+    if (!srcMatch) {
+      return match; // No src attribute, skip
+    }
+    const src = srcMatch[1];
+
+    // Skip external URLs and data URIs
+    if (
+      src.startsWith('http://') ||
+      src.startsWith('https://') ||
+      src.startsWith('data:')
+    ) {
+      return match;
+    }
+
+    // Clean up src path
+    let origSrc = src;
+    if (!src.startsWith('/assets/')) {
+      origSrc = `/assets/${src.replace(/^\.?\/?/, '')}`;
+    }
+
+    // Generate WebP path
+    let webpSrc = origSrc;
+    // Remove any query/hash from src for webp path
+    webpSrc = webpSrc.replace(/[#?].*$/, '');
+    webpSrc = webpSrc.replace(/\.[^.\/]+$/, '.webp');
+
+    // Check if WebP file exists in output assets
+    const webpPath = join(outDir, webpSrc.replace(/^\/assets\//, 'assets/'));
+    let webpExists = false;
+    try {
+      // Synchronous check for file existence
+      const stat = Deno.statSync(webpPath);
+      webpExists = stat.isFile;
+    } catch {
+      // File doesn't exist
+      webpExists = false;
+    }
+
+      // Replace with WebP directly if it exists, otherwise use original
+      if (webpExists) {
+        // Update src attribute to use WebP version
+        const updatedAttrs = attrs.replace(
+          /src=["'][^"']+["']/i,
+          `src="${webpSrc}"`
+        );
+        return `<img ${updatedAttrs}>`;
+      } else {
+      // If WebP doesn't exist, return original img tag with updated src if needed
+      if (origSrc !== src) {
+        const updatedAttrs = attrs.replace(
+          /src=["'][^"']+["']/i,
+          `src="${origSrc}"`
+        );
+        return `<img ${updatedAttrs}>`;
+      }
+      return match;
+    }
+  });
+
+  // Restore protected images
+  markdown = markdown.replace(/__PROTECTED_IMG_(\d+)__/g, (match, index) => {
+    return protectedImages[parseInt(index)] || match;
+  });
 
   return markdown;
 }
@@ -1862,6 +1937,14 @@ async function build(): Promise<void> {
     return;
   }
 
+  // Copy assets and optimize images BEFORE processing markdown files
+  // This ensures WebP files exist when parseMarkdown() checks for them
+  console.log('📁 Copying assets...');
+  await copyAssets();
+
+  console.log('🖼️  Optimizing images...');
+  await optimizeImages();
+
   // Process markdown files in parallel for better performance
   console.log(`📝 Processing ${markdownFiles.length} markdown files...`);
   buildMetrics.totalFiles = markdownFiles.length;
@@ -1953,10 +2036,6 @@ async function build(): Promise<void> {
     `📊 Build summary: ${successful} files processed successfully, ${failed} failed`
   );
 
-  // Copy assets and optimize images
-  console.log('📁 Copying assets...');
-  await copyAssets();
-
   // Copy serve.ts to dist for independent execution
   console.log('🚀 Copying and patching serve.ts to dist...');
   try {
@@ -1981,9 +2060,6 @@ async function build(): Promise<void> {
   } catch (error) {
     console.error('❌ Failed to copy/patch serve.ts:', error);
   }
-
-  console.log('🖼️  Optimizing images...');
-  await optimizeImages();
 
   // Log performance metrics
   logBuildMetrics();
