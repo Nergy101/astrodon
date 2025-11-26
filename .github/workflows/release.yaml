@@ -19,7 +19,7 @@ env:
   DENO_VERSION_FILE: deno.json
 
 jobs:
-  build-and-release:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -58,19 +58,6 @@ jobs:
         uses: denoland/setup-deno@v1
         with:
           deno-version: ${{ steps.deno_version.outputs.DENO_VERSION }}
-
-      - name: Cache Deno dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/deno
-            deno.lock
-          key: ${{ runner.os }}-deno-${{ hashFiles('**/deno.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-deno-
-
-      - name: Install dependencies
-        run: deno cache build.ts
 
       - name: Parse tag and determine release type
         id: parse_tag
@@ -130,9 +117,6 @@ jobs:
           echo "✅ Updated deno.json version to $VERSION"
           cat deno.json | grep version
 
-      - name: Build project
-        run: deno task build
-
       - name: Generate changelog
         id: changelog
         run: |
@@ -176,34 +160,6 @@ jobs:
           echo -e "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create release archives
-        id: create_archives
-        run: |
-          VERSION="${{ steps.parse_tag.outputs.VERSION }}"
-          PACKAGE_NAME="${{ steps.package_info.outputs.PACKAGE_NAME }}"
-          # Extract package name without scope for archive naming
-          ARCHIVE_PREFIX="${PACKAGE_NAME#@*/}"
-
-          # Create tar.gz archive
-          cd dist
-          tar -czf ../${ARCHIVE_PREFIX}-$VERSION.tar.gz .
-          cd ..
-
-          # Create zip archive
-          zip -r ${ARCHIVE_PREFIX}-$VERSION.zip dist/
-
-          # Create a minimal archive with just the essential files
-          mkdir -p minimal
-          cp -r dist/* minimal/
-          cd minimal
-          tar -czf ../${ARCHIVE_PREFIX}-$VERSION-minimal.tar.gz .
-          cd ..
-          rm -rf minimal
-
-          echo "ARCHIVE_PREFIX=$ARCHIVE_PREFIX" >> $GITHUB_OUTPUT
-          echo "📦 Created release archives:"
-          ls -lh ${ARCHIVE_PREFIX}-$VERSION.*
-
       - name: Generate release body
         id: release_body
         run: |
@@ -227,7 +183,6 @@ jobs:
           DENO_VERSION="${{ steps.deno_version.outputs.DENO_VERSION }}"
           PACKAGE_NAME="${{ steps.package_info.outputs.PACKAGE_NAME }}"
           VERSION="${{ steps.parse_tag.outputs.VERSION }}"
-          ARCHIVE_PREFIX="${{ steps.create_archives.outputs.ARCHIVE_PREFIX }}"
 
           cat > release_body.md << EOF
           ## 📋 Release Information
@@ -240,24 +195,11 @@ jobs:
 
           ${{ steps.changelog.outputs.CHANGELOG }}
 
-          ## 📦 Build Information
+          ## 📦 Package Information
 
           - **Runtime:** Deno $DENO_VERSION
-          - **Build System:** $PACKAGE_NAME
-          - **Archive Formats:** TAR.GZ, ZIP, Minimal TAR.GZ
+          - **Package:** $PACKAGE_NAME
           - **JSR Package:** [$PACKAGE_NAME@$VERSION](https://jsr.io/$PACKAGE_NAME)
-
-          ## 🚀 Installation
-
-          1. Download the appropriate archive for your platform
-          2. Extract the files to your desired location
-          3. Serve the files using your preferred web server
-
-          ### Archive Options
-
-          - **Full Archive** (\`${ARCHIVE_PREFIX}-$VERSION.tar.gz\`): Complete build with all assets
-          - **ZIP Archive** (\`${ARCHIVE_PREFIX}-$VERSION.zip\`): Windows-friendly format
-          - **Minimal Archive** (\`${ARCHIVE_PREFIX}-$VERSION-minimal.tar.gz\`): Essential files only
 
           ## 🔧 Development
 
@@ -265,6 +207,18 @@ jobs:
           EOF
 
           echo "RELEASE_NAME=$RELEASE_NAME $VERSION" >> $GITHUB_OUTPUT
+
+      - name: Run Performance Benchmark
+        run: |
+          echo "🧪 Running performance benchmark on testing blog..."
+          deno task benchmark
+          echo "✅ Performance benchmark completed successfully"
+
+      - name: Run Output Verification Tests
+        run: |
+          echo "🧪 Running output verification tests..."
+          deno task test
+          echo "✅ All output verification tests passed"
 
       - name: Publish to JSR
         if: github.event_name == 'push' || github.event.inputs.publish_to_jsr == 'true'
@@ -281,28 +235,3 @@ jobs:
           body_path: release_body.md
           draft: ${{ steps.parse_tag.outputs.IS_DRAFT }}
           prerelease: ${{ steps.parse_tag.outputs.IS_PRERELEASE }}
-          files: |
-            ${{ steps.create_archives.outputs.ARCHIVE_PREFIX }}-${{ steps.parse_tag.outputs.VERSION }}.tar.gz
-            ${{ steps.create_archives.outputs.ARCHIVE_PREFIX }}-${{ steps.parse_tag.outputs.VERSION }}.zip
-            ${{ steps.create_archives.outputs.ARCHIVE_PREFIX }}-${{ steps.parse_tag.outputs.VERSION }}-minimal.tar.gz
-
-      - name: Generate build report
-        run: |
-          VERSION="${{ steps.parse_tag.outputs.VERSION }}"
-          ARCHIVE_PREFIX="${{ steps.create_archives.outputs.ARCHIVE_PREFIX }}"
-          echo "📊 Build Report for $VERSION"
-          echo "=================================="
-          echo ""
-          echo "📁 Build Contents:"
-          du -sh dist/ || echo "dist/ directory not found"
-          echo ""
-          echo "📄 File Counts:"
-          find dist/ -type f -name "*.html" | wc -l | xargs echo "HTML files:"
-          find dist/ -type f -name "*.css" | wc -l | xargs echo "CSS files:"
-          find dist/ -type f -name "*.js" | wc -l | xargs echo "JS files:"
-          find dist/ -type f -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.webp" | wc -l | xargs echo "Image files:"
-          echo ""
-          echo "📦 Archive Sizes:"
-          ls -lh ${ARCHIVE_PREFIX}-${VERSION}.*
-          echo ""
-          echo "🎯 Release Type: ${{ steps.parse_tag.outputs.RELEASE_TYPE }}"
