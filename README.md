@@ -19,7 +19,7 @@ Or check out the look and feel on my blog https://blog.nergy.space
     "dev": "deno task build && deno task serve"
   },
   "imports": {
-    "astrodon": "jsr:@nergy101/astrodon@0.2.3"
+    "astrodon": "jsr:@nergy101/astrodon@0.2.4"
   }
 }
 ```
