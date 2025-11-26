@@ -3,10 +3,11 @@
 Astrodon is a tiny Deno static site toolkit. Build markdown with TypeScript-powered templates, and serve the output with a minimal dev server. Keep your site simple, fast, and readable.
 
 See my blog for example usage: https://github.com/Nergy101/blog
+Or check out the look and feel on my blog https://blog.nergy.space
 
 ## Quick start
 
-1. Install Deno 1.40+ (or Bun 1.0+)
+1. Install Deno 2+ (or Bun 1.0+)
 
 2. Create `deno.json` with JSR import + tasks
 
