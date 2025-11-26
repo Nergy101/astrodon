@@ -1,0 +1,309 @@
+name: Advanced Release
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "v*-alpha*"
+      - "v*-beta*"
+      - "v*-rc*"
+  workflow_dispatch:
+    inputs:
+      publish_to_jsr:
+        description: "Publish to JSR"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  DENO_VERSION_FILE: deno.json
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write # The OIDC ID token is used for authentication with JSR.
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for changelog generation
+
+      - name: Read Deno version from deno.json
+        id: deno_version
+        run: |
+          # Try to extract Deno version from deno.json using jq (available on Ubuntu runners)
+          if command -v jq &> /dev/null; then
+            DENO_VERSION=$(jq -r '.compatibility.deno // "^2.0.0"' "${{ env.DENO_VERSION_FILE }}")
+          else
+            # Fallback: use grep and sed to extract version
+            DENO_VERSION=$(grep -o '"deno":\s*"[^"]*"' "${{ env.DENO_VERSION_FILE }}" | sed 's/.*"deno":\s*"\([^"]*\)".*/\1/' || echo "^2.0.0")
+          fi
+          
+          # Extract version number and convert to vX.Y.Z format if needed
+          if [[ "$DENO_VERSION" =~ \^([0-9]+\.[0-9]+) ]]; then
+            DENO_VERSION="v${BASH_REMATCH[1]}.0"
+          elif [[ "$DENO_VERSION" =~ v?([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            DENO_VERSION="v${BASH_REMATCH[1]}"
+          elif [[ "$DENO_VERSION" =~ v?([0-9]+\.[0-9]+) ]]; then
+            DENO_VERSION="v${BASH_REMATCH[1]}.0"
+          fi
+          echo "DENO_VERSION=$DENO_VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Detected Deno version requirement: $DENO_VERSION"
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: ${{ steps.deno_version.outputs.DENO_VERSION }}
+
+      - name: Cache Deno dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/deno
+            deno.lock
+          key: ${{ runner.os }}-deno-${{ hashFiles('**/deno.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-deno-
+
+      - name: Install dependencies
+        run: deno cache build.ts
+
+      - name: Parse tag and determine release type
+        id: parse_tag
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+
+          # Extract version without prefix
+          VERSION="${TAG_NAME#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+          # Determine release type
+          if [[ "$TAG_NAME" == *"-alpha"* ]]; then
+            RELEASE_TYPE="alpha"
+            IS_PRERELEASE=true
+            IS_DRAFT=false
+          elif [[ "$TAG_NAME" == *"-beta"* ]]; then
+            RELEASE_TYPE="beta"
+            IS_PRERELEASE=true
+            IS_DRAFT=false
+          elif [[ "$TAG_NAME" == *"-rc"* ]]; then
+            RELEASE_TYPE="rc"
+            IS_PRERELEASE=true
+            IS_DRAFT=false
+          else
+            RELEASE_TYPE="release"
+            IS_PRERELEASE=false
+            IS_DRAFT=false
+          fi
+
+          echo "RELEASE_TYPE=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+          echo "IS_PRERELEASE=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "IS_DRAFT=$IS_DRAFT" >> $GITHUB_OUTPUT
+
+      - name: Read package name from deno.json
+        id: package_info
+        run: |
+          # Try to extract package name from deno.json using jq (available on Ubuntu runners)
+          if command -v jq &> /dev/null; then
+            PACKAGE_NAME=$(jq -r '.name // "astrodon"' "${{ env.DENO_VERSION_FILE }}")
+          else
+            # Fallback: use grep and sed to extract name
+            PACKAGE_NAME=$(grep -o '"name":\s*"[^"]*"' "${{ env.DENO_VERSION_FILE }}" | sed 's/.*"name":\s*"\([^"]*\)".*/\1/' || echo "astrodon")
+          fi
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "📦 Package name: $PACKAGE_NAME"
+
+      - name: Update version in deno.json
+        run: |
+          VERSION="${{ steps.parse_tag.outputs.VERSION }}"
+          # Update version in deno.json using Deno
+          deno eval "
+            const json = JSON.parse(await Deno.readTextFile('deno.json'));
+            json.version = '$VERSION';
+            await Deno.writeTextFile('deno.json', JSON.stringify(json, null, 2) + '\n');
+          "
+          echo "✅ Updated deno.json version to $VERSION"
+          cat deno.json | grep version
+
+      - name: Build project
+        run: deno task build
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # First release - get all commits
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            # Get commits since last tag
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges $PREVIOUS_TAG..HEAD)
+          fi
+
+          # Categorize commits
+          FEATURES=$(echo "$COMMITS" | grep -i "feat\|feature\|add" || echo "")
+          FIXES=$(echo "$COMMITS" | grep -i "fix\|bug\|patch" || echo "")
+          BREAKING=$(echo "$COMMITS" | grep -i "breaking\|major" || echo "")
+          OTHER=$(echo "$COMMITS" | grep -v -i "feat\|feature\|add\|fix\|bug\|patch\|breaking\|major" || echo "")
+
+          # Build changelog
+          CHANGELOG=""
+
+          if [ ! -z "$BREAKING" ]; then
+            CHANGELOG="$CHANGELOG\n## 🚨 Breaking Changes\n$BREAKING\n"
+          fi
+
+          if [ ! -z "$FEATURES" ]; then
+            CHANGELOG="$CHANGELOG\n## ✨ New Features\n$FEATURES\n"
+          fi
+
+          if [ ! -z "$FIXES" ]; then
+            CHANGELOG="$CHANGELOG\n## 🐛 Bug Fixes\n$FIXES\n"
+          fi
+
+          if [ ! -z "$OTHER" ]; then
+            CHANGELOG="$CHANGELOG\n## 📝 Other Changes\n$OTHER\n"
+          fi
+
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create release archives
+        id: create_archives
+        run: |
+          VERSION="${{ steps.parse_tag.outputs.VERSION }}"
+          PACKAGE_NAME="${{ steps.package_info.outputs.PACKAGE_NAME }}"
+          # Extract package name without scope for archive naming
+          ARCHIVE_PREFIX="${PACKAGE_NAME#@*/}"
+          
+          # Create tar.gz archive
+          cd dist
+          tar -czf ../${ARCHIVE_PREFIX}-$VERSION.tar.gz .
+          cd ..
+
+          # Create zip archive
+          zip -r ${ARCHIVE_PREFIX}-$VERSION.zip dist/
+
+          # Create a minimal archive with just the essential files
+          mkdir -p minimal
+          cp -r dist/* minimal/
+          cd minimal
+          tar -czf ../${ARCHIVE_PREFIX}-$VERSION-minimal.tar.gz .
+          cd ..
+          rm -rf minimal
+
+          echo "ARCHIVE_PREFIX=$ARCHIVE_PREFIX" >> $GITHUB_OUTPUT
+          echo "📦 Created release archives:"
+          ls -lh ${ARCHIVE_PREFIX}-$VERSION.*
+
+      - name: Generate release body
+        id: release_body
+        run: |
+          RELEASE_NAME=""
+          case "${{ steps.parse_tag.outputs.RELEASE_TYPE }}" in
+            alpha)
+              RELEASE_NAME="🚧 Alpha Release"
+              ;;
+            beta)
+              RELEASE_NAME="🧪 Beta Release"
+              ;;
+            rc)
+              RELEASE_NAME="🎯 Release Candidate"
+              ;;
+            release)
+              RELEASE_NAME="🎉 Release"
+              ;;
+          esac
+
+          BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
+          DENO_VERSION="${{ steps.deno_version.outputs.DENO_VERSION }}"
+          PACKAGE_NAME="${{ steps.package_info.outputs.PACKAGE_NAME }}"
+          VERSION="${{ steps.parse_tag.outputs.VERSION }}"
+          ARCHIVE_PREFIX="${{ steps.create_archives.outputs.ARCHIVE_PREFIX }}"
+
+          cat > release_body.md << EOF
+          ## 📋 Release Information
+
+          **Version:** $VERSION
+          **Type:** ${{ steps.parse_tag.outputs.RELEASE_TYPE }}
+          **Build Date:** $BUILD_DATE
+
+          ## 🔄 What's Changed
+
+          ${{ steps.changelog.outputs.CHANGELOG }}
+
+          ## 📦 Build Information
+
+          - **Runtime:** Deno $DENO_VERSION
+          - **Build System:** $PACKAGE_NAME
+          - **Archive Formats:** TAR.GZ, ZIP, Minimal TAR.GZ
+          - **JSR Package:** [$PACKAGE_NAME@$VERSION](https://jsr.io/$PACKAGE_NAME)
+
+          ## 🚀 Installation
+
+          1. Download the appropriate archive for your platform
+          2. Extract the files to your desired location
+          3. Serve the files using your preferred web server
+
+          ### Archive Options
+
+          - **Full Archive** (\`${ARCHIVE_PREFIX}-$VERSION.tar.gz\`): Complete build with all assets
+          - **ZIP Archive** (\`${ARCHIVE_PREFIX}-$VERSION.zip\`): Windows-friendly format
+          - **Minimal Archive** (\`${ARCHIVE_PREFIX}-$VERSION-minimal.tar.gz\`): Essential files only
+
+          ## 🔧 Development
+
+          For development setup, see the [README](https://github.com/${{ github.repository }}/blob/main/README.md).
+          EOF
+
+          echo "RELEASE_NAME=$RELEASE_NAME $VERSION" >> $GITHUB_OUTPUT
+
+      - name: Publish to JSR
+        if: github.event_name == 'push' || github.event.inputs.publish_to_jsr == 'true'
+        run: |
+          echo "📦 Publishing to JSR..."
+          npx jsr publish
+          echo "✅ Successfully published to JSR"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.parse_tag.outputs.TAG_NAME }}
+          name: ${{ steps.release_body.outputs.RELEASE_NAME }}
+          body_path: release_body.md
+          draft: ${{ steps.parse_tag.outputs.IS_DRAFT }}
+          prerelease: ${{ steps.parse_tag.outputs.IS_PRERELEASE }}
+          files: |
+            ${{ steps.create_archives.outputs.ARCHIVE_PREFIX }}-${{ steps.parse_tag.outputs.VERSION }}.tar.gz
+            ${{ steps.create_archives.outputs.ARCHIVE_PREFIX }}-${{ steps.parse_tag.outputs.VERSION }}.zip
+            ${{ steps.create_archives.outputs.ARCHIVE_PREFIX }}-${{ steps.parse_tag.outputs.VERSION }}-minimal.tar.gz
+
+      - name: Generate build report
+        run: |
+          VERSION="${{ steps.parse_tag.outputs.VERSION }}"
+          ARCHIVE_PREFIX="${{ steps.create_archives.outputs.ARCHIVE_PREFIX }}"
+          echo "📊 Build Report for $VERSION"
+          echo "=================================="
+          echo ""
+          echo "📁 Build Contents:"
+          du -sh dist/ || echo "dist/ directory not found"
+          echo ""
+          echo "📄 File Counts:"
+          find dist/ -type f -name "*.html" | wc -l | xargs echo "HTML files:"
+          find dist/ -type f -name "*.css" | wc -l | xargs echo "CSS files:"
+          find dist/ -type f -name "*.js" | wc -l | xargs echo "JS files:"
+          find dist/ -type f -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.webp" | wc -l | xargs echo "Image files:"
+          echo ""
+          echo "📦 Archive Sizes:"
+          ls -lh ${ARCHIVE_PREFIX}-${VERSION}.*
+          echo ""
+          echo "🎯 Release Type: ${{ steps.parse_tag.outputs.RELEASE_TYPE }}"
+
