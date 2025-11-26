@@ -6,7 +6,7 @@ See my blog for example usage: https://github.com/Nergy101/blog
 
 ## Quick start
 
-1. Install Deno 1.40+
+1. Install Deno 1.40+ (or Bun 1.0+)
 
 2. Create `deno.json` with JSR import + tasks
 
@@ -18,7 +18,7 @@ See my blog for example usage: https://github.com/Nergy101/blog
     "dev": "deno task build && deno task serve"
   },
   "imports": {
-    "astrodon": "jsr:@nergy101/astrodon@0.2.1"
+    "astrodon": "jsr:@nergy101/astrodon@0.2.2"
   }
 }
 ```
