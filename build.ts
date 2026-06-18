@@ -1,15 +1,14 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run
 
-import { copy, ensureDir } from 'jsr:@std/fs';
+import { copy, ensureDir } from '@std/fs';
 import {
   basename,
   dirname,
   extname,
-  fromFileUrl,
   join,
   relative,
-} from 'jsr:@std/path';
-import { crypto } from 'jsr:@std/crypto';
+} from '@std/path';
+import { crypto } from '@std/crypto';
 
 // Cache for processed files to avoid reprocessing unchanged content
 const fileCache = new Map<string, { hash: string; content: string }>();
@@ -2063,10 +2062,6 @@ async function build(): Promise<void> {
 
   // Log performance metrics
   logBuildMetrics();
-
-  // Clean up WebP files
-  console.log('🧹 Cleaning up WebP files...');
-  // await cleanupWebpFiles(); // This line is removed as per the edit hint
 
   console.log('🎉 Build complete!');
 }

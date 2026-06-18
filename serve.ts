@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-net --allow-run
 
-import { serveDir } from "jsr:@std/http/file-server";
-import { extname, join } from "jsr:@std/path";
+import { serveDir } from "@std/http/file-server";
+import { extname, join } from "@std/path";
 
 // Get port from command line arguments or use default
 const portArg = Deno.args.find((arg) => arg.startsWith("--port="));
@@ -9,71 +9,24 @@ const port = portArg ? parseInt(portArg.split("=")[1]) : 8000;
 const rootArg = Deno.args.find((arg) => arg.startsWith("--root="));
 const ROOT = rootArg ? rootArg.split("=")[1] : "./dist";
 
-// Performance optimizations: Response cache
-const responseCache = new Map<
-  string,
-  { response: Response; timestamp: number }
->();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// Headers that keep the dev server from caching anything, so edits show up
+// immediately on the next request.
+const NO_CACHE_HEADERS: Record<string, string> = {
+  "cache-control": "no-cache, no-store, must-revalidate",
+  "pragma": "no-cache",
+  "expires": "0",
+};
 
-// Compression helper
-function compressResponse(
-  content: string,
-  contentType: string,
-  enableCache: boolean = false,
-): Response {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(content);
-
-  const headers: Record<string, string> = {
-    "content-type": contentType,
-  };
-
-  // Only add cache headers for API endpoints
-  if (enableCache) {
-    headers["cache-control"] = "public, max-age=300"; // 5 minutes
-    headers["vary"] = "Accept-Encoding";
-  } else {
-    // Disable caching for normal routes
-    headers["cache-control"] = "no-cache, no-store, must-revalidate";
-    headers["pragma"] = "no-cache";
-    headers["expires"] = "0";
-  }
-
-  return new Response(data, { headers });
+function htmlResponse(content: string): Response {
+  return new Response(new TextEncoder().encode(content), {
+    headers: { "content-type": "text/html; charset=utf-8", ...NO_CACHE_HEADERS },
+  });
 }
-
-// Cache management
-function getCachedResponse(path: string): Response | null {
-  const cached = responseCache.get(path);
-  if (!cached) return null;
-
-  if (Date.now() - cached.timestamp > CACHE_TTL) {
-    responseCache.delete(path);
-    return null;
-  }
-
-  return cached.response;
-}
-
-function setCachedResponse(path: string, response: Response) {
-  responseCache.set(path, { response, timestamp: Date.now() });
-}
-
-// Clean up old cache entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [path, cached] of responseCache.entries()) {
-    if (now - cached.timestamp > CACHE_TTL) {
-      responseCache.delete(path);
-    }
-  }
-}, CACHE_TTL);
 
 console.log(`🚀 Starting development server at http://localhost:${port}`);
 console.log(`📁 Serving files from ${ROOT}/`);
 console.log(`🔄 Auto fallback to index.html enabled`);
-console.log(`⚡ API caching enabled (5min TTL), normal routes disabled`);
+console.log(`⚡ Caching disabled (dev server always serves fresh content)`);
 
 // Function to generate tree view of dist directory
 async function generateTreeView(
@@ -136,37 +89,13 @@ Deno.serve({ port }, async (req: Request) => {
   const url = new URL(req.url);
   const path = url.pathname;
 
-  // Handle requests to removed Lua endpoints
-  if (path.startsWith("/lua-scripts/")) {
-    const response = new Response(
-      JSON.stringify({
-        error: "Lua functionality has been removed. This project now uses pure TypeScript.",
-        message: "Please update your client-side code to remove references to /lua-scripts/ endpoints.",
-      }),
-      {
-        status: 410, // Gone - indicates the resource is no longer available
-        headers: {
-          "content-type": "application/json",
-          "cache-control": "no-cache, no-store, must-revalidate",
-        },
-      },
-    );
-    return response;
-  }
-
   // Try to serve clean URLs like /about as /about.html
   if (!extname(path) && path !== "/") {
     let htmlPath = path.endsWith("/") ? path.slice(0, -1) : path;
     htmlPath = htmlPath + ".html";
     try {
       const html = await Deno.readTextFile(ROOT + htmlPath);
-      const response = compressResponse(
-        html,
-        "text/html; charset=utf-8",
-        false,
-      );
-      setCachedResponse(path, response);
-      return response;
+      return htmlResponse(html);
     } catch {
       // If not found, fall through to serveDir
     }
@@ -181,20 +110,17 @@ Deno.serve({ port }, async (req: Request) => {
 
     if (response.status !== 404) {
       const headers = new Headers(response.headers);
-      headers.set("cache-control", "no-cache, no-store, must-revalidate");
-      headers.set("pragma", "no-cache");
-      headers.set("expires", "0");
+      for (const [key, value] of Object.entries(NO_CACHE_HEADERS)) {
+        headers.set(key, value);
+      }
 
-      const modifiedResponse = new Response(response.body, {
+      return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
         headers: headers,
       });
-
-      setCachedResponse(path, modifiedResponse);
-      return modifiedResponse;
     }
-  } catch (_error) {
+  } catch {
     // Continue to fallback logic
   }
 
@@ -202,22 +128,14 @@ Deno.serve({ port }, async (req: Request) => {
   try {
     const indexPath = join(ROOT, "index.html");
     const indexContent = await Deno.readTextFile(indexPath);
-
-    const response = compressResponse(
-      indexContent,
-      "text/html; charset=utf-8",
-      false,
-    );
-    setCachedResponse(path, response);
-    return response;
-  } catch (_error) {
-    const response = new Response("404 - Page not found", {
+    return htmlResponse(indexContent);
+  } catch {
+    return new Response("404 - Page not found", {
       status: 404,
       headers: {
         "content-type": "text/plain; charset=utf-8",
-        "cache-control": "no-cache, no-store, must-revalidate",
+        ...NO_CACHE_HEADERS,
       },
     });
-    return response;
   }
 });
