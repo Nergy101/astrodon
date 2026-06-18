@@ -30,10 +30,6 @@ Deno.test('Template Processing - Metadata rendering', async () => {
     // Verify metadata is rendered from template.ts
     // Note: Metadata might be in the content area, not necessarily as a separate div
     // Check if author or tags are present in the HTML (they should be from template.ts)
-    const hasMetadata =
-      html.includes('<div class="metadata">') ||
-      html.includes('Test Author') ||
-      html.includes('<span class="tag">');
 
     assertStringIncludes(
       html,

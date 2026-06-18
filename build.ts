@@ -10,6 +10,10 @@ import {
 } from '@std/path';
 import { crypto } from '@std/crypto';
 
+// Frontmatter is arbitrary YAML, so values are intentionally loosely typed.
+// deno-lint-ignore no-explicit-any
+type Meta = Record<string, any>;
+
 // Cache for processed files to avoid reprocessing unchanged content
 const fileCache = new Map<string, { hash: string; content: string }>();
 
@@ -66,7 +70,7 @@ function parseMarkdown(markdown: string): string {
 
   markdown = markdown.replace(
     /<script>([\s\S]*?)<\/script>/g,
-    function (match, scriptContent) {
+    function (match, _scriptContent) {
       scriptBlocks.push(match);
       return `\n\n__SCRIPT_BLOCK_${scriptBlockIndex++}__\n\n`;
     }
@@ -75,7 +79,7 @@ function parseMarkdown(markdown: string): string {
   // Images - ensure proper asset paths with WebP fallback (process before links)
   markdown = markdown.replace(
     /!\[([^\]]*)\]\(([^)]+)\)/g,
-    (match, alt, src) => {
+    (_match, alt, src) => {
       // Clean up src path
       let origSrc = src;
       if (
@@ -117,7 +121,7 @@ function parseMarkdown(markdown: string): string {
   // Links (process after images to avoid conflicts)
   markdown = markdown.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    (match, text, url) => {
+    (_match, text, url) => {
       // Add target="_blank" to all links
       return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
     }
@@ -131,7 +135,7 @@ function parseMarkdown(markdown: string): string {
   // Support CRLF and optional/trailing spaces after language token
   markdown = markdown.replace(
     /```([^\r\n]+)?\r?\n([\s\S]*?)```/g,
-    function (match, language, code) {
+    function (_match, language, code) {
       rawCodeBlocks.push({
         lang: language ? String(language).trim() : 'plaintext',
         code: code, // preserve as-is
@@ -355,7 +359,7 @@ function parseMarkdown(markdown: string): string {
   const abbrevDefs: Record<string, string> = {};
   markdown = markdown.replace(
     /^\\_\[(.+?)\]:\s*(.+)$/gm,
-    (match, abbr, def) => {
+    (_match, abbr, def) => {
       abbrevDefs[abbr] = def;
       return '';
     }
@@ -378,7 +382,7 @@ function parseMarkdown(markdown: string): string {
   const footnoteDefs: Record<string, string> = {};
   markdown = markdown.replace(
     /^\[\^([^\]]+)\]:\s*(.+)$/gm,
-    (match, name, def) => {
+    (_match, name, def) => {
       footnoteDefs[name] = def.trim();
       return '';
     }
@@ -387,7 +391,7 @@ function parseMarkdown(markdown: string): string {
   // Also handle footnote definitions that might be at the end of content
   markdown = markdown.replace(
     /\n\[\^([^\]]+)\]:\s*(.+)$/gm,
-    (match, name, def) => {
+    (_match, name, def) => {
       if (!footnoteDefs[name]) {
         footnoteDefs[name] = def.trim();
       }
@@ -399,7 +403,7 @@ function parseMarkdown(markdown: string): string {
   let footnoteCounter = 1;
   const footnoteRefs: Record<string, number> = {};
 
-  markdown = markdown.replace(/\[\^([^\]]+)\](?!:)/g, (match, name) => {
+  markdown = markdown.replace(/\[\^([^\]]+)\](?!:)/g, (_match, name) => {
     if (!footnoteRefs[name]) {
       footnoteRefs[name] = footnoteCounter++;
     }
@@ -414,42 +418,42 @@ function parseMarkdown(markdown: string): string {
   // Process the rest of the markdown
   markdown = markdown
     // Headers - allow for leading whitespace and add anchor links
-    .replace(/^\s*###### (.*$)/gim, (match, title) => {
+    .replace(/^\s*###### (.*$)/gim, (_match, title) => {
       const id = title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
       return `<h6 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h6>`;
     })
-    .replace(/^\s*##### (.*$)/gim, (match, title) => {
+    .replace(/^\s*##### (.*$)/gim, (_match, title) => {
       const id = title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
       return `<h5 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h5>`;
     })
-    .replace(/^\s*#### (.*$)/gim, (match, title) => {
+    .replace(/^\s*#### (.*$)/gim, (_match, title) => {
       const id = title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
       return `<h4 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h4>`;
     })
-    .replace(/^\s*### (.*$)/gim, (match, title) => {
+    .replace(/^\s*### (.*$)/gim, (_match, title) => {
       const id = title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
       return `<h3 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h3>`;
     })
-    .replace(/^\s*## (.*$)/gim, (match, title) => {
+    .replace(/^\s*## (.*$)/gim, (_match, title) => {
       const id = title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
       return `<h2 id="${id}"><a href="#${id}" class="header-anchor">${title}</a></h2>`;
     })
-    .replace(/^\s*# (.*$)/gim, (match, title) => {
+    .replace(/^\s*# (.*$)/gim, (_match, title) => {
       const id = title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
@@ -489,7 +493,7 @@ function parseMarkdown(markdown: string): string {
     .replace(/<p><\/p>/g, '')
     .replace(/<p><br><\/p>/g, '')
     // Remove <br> tags from definition descriptions
-    .replace(/<dd>(.*?)<\/dd>/g, (match, content) => {
+    .replace(/<dd>(.*?)<\/dd>/g, (_match, content) => {
       return `<dd>${content.replace(/<br>/g, ' ')}</dd>`;
     })
     // Clean up <br> tags around definition list elements
@@ -594,7 +598,7 @@ function parseMarkdown(markdown: string): string {
   // Handle custom HTML code blocks: {{htmlcode}} ... {{/htmlcode}} - AFTER all other processing
   markdown = markdown.replace(
     /\{\{htmlcode\}\}([\s\S]*?)\{\{\/htmlcode\}\}/g,
-    (match, code) => {
+    (_match, code) => {
       return `<pre><code class=\"language-html\">${code
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')}</code></pre>`;
@@ -684,7 +688,7 @@ function parseMarkdown(markdown: string): string {
 
 interface PageData {
   content: string;
-  meta: Record<string, any>;
+  meta: Meta;
   path: string;
 }
 
@@ -1201,7 +1205,7 @@ async function processTOCMarker(
       ) {
         const entryPath = join(targetDir, entry.name);
         const content = await Deno.readTextFile(entryPath);
-        const meta = await extractMetadata(content);
+        const meta = extractMetadata(content);
 
         // Extract excerpt (first paragraph after frontmatter)
         let excerpt = '';
@@ -1342,7 +1346,7 @@ async function processTOCMarker(
 async function processTemplate(
   mdPath: string,
   content: string,
-  meta: Record<string, any>
+  meta: Meta
 ): Promise<string> {
   try {
     // Convert relative path to absolute file:// URL for import
@@ -1371,7 +1375,7 @@ async function processTemplate(
 
     // If render function doesn't exist, return original content
     return content;
-  } catch (error) {
+  } catch {
     // If template file doesn't exist or fails, return original content
     return content;
   }
@@ -1388,7 +1392,7 @@ async function processMarkdownFile(filePath: string): Promise<PageData> {
       console.log(`⚡ Using cached result for ${filePath}`);
       buildMetrics.cachedFiles++;
       // We still need to parse metadata for the return value
-      const meta = await extractMetadata(content);
+      const meta = extractMetadata(content);
       return {
         content: cached.content,
         meta,
@@ -1398,7 +1402,7 @@ async function processMarkdownFile(filePath: string): Promise<PageData> {
   }
 
   // Extract frontmatter if present
-  const meta = await extractMetadata(content);
+  const meta = extractMetadata(content);
   let markdownContent = content;
 
   if (content.startsWith('---')) {
@@ -1428,8 +1432,8 @@ async function processMarkdownFile(filePath: string): Promise<PageData> {
 }
 
 // Extract metadata from markdown content
-async function extractMetadata(content: string): Promise<Record<string, any>> {
-  const meta: Record<string, any> = {};
+function extractMetadata(content: string): Meta {
+  const meta: Meta = {};
 
   if (content.startsWith('---')) {
     const endIndex = content.indexOf('---', 3);
@@ -1473,7 +1477,7 @@ function checkWebPLogoExists(): boolean {
 // Generate HTML from template
 async function generateHTML(
   content: string,
-  meta: Record<string, any>,
+  meta: Meta,
   navigation: string
 ): Promise<string> {
   let html = DEFAULT_TEMPLATE;
@@ -1558,14 +1562,14 @@ async function generateNavigation(): Promise<NavItem[]> {
 
               try {
                 const content = await Deno.readTextFile(filePath);
-                const meta = await extractMetadata(content);
+                const meta = extractMetadata(content);
                 if (meta.date) {
                   date = meta.date;
                 }
                 if (meta.title) {
                   title = meta.title;
                 }
-              } catch (error) {
+              } catch {
                 console.log(`ℹ️  Could not read metadata from ${filePath}`);
               }
 
@@ -1590,7 +1594,7 @@ async function generateNavigation(): Promise<NavItem[]> {
               return a.title.localeCompare(b.title);
             }
           });
-        } catch (error) {
+        } catch {
           console.log(`ℹ️  Could not read subdirectory ${folderName}`);
         }
 
@@ -1605,7 +1609,7 @@ async function generateNavigation(): Promise<NavItem[]> {
         }
       }
     }
-  } catch (error) {
+  } catch {
     console.error('❌ Could not read routes directory for navigation');
   }
 
@@ -1674,7 +1678,7 @@ async function copyAssets(): Promise<void> {
     await ensureDir(distAssetsDir);
 
     // Copy all assets recursively, including images
-    async function copyAssetRecursively(dir: string, basePath: string = '') {
+    const copyAssetRecursively = async (dir: string, basePath: string = ''): Promise<void> => {
       try {
         for await (const entry of Deno.readDir(dir)) {
           const sourcePath = join(dir, entry.name);
@@ -1690,14 +1694,14 @@ async function copyAssets(): Promise<void> {
             await copyAssetRecursively(sourcePath, relativePath);
           }
         }
-      } catch (error) {
+      } catch {
         console.log(`ℹ️  Could not read directory ${dir}`);
       }
     }
 
     await copyAssetRecursively(assetsDir);
     console.log('✅ All assets copied to dist/assets/');
-  } catch (error) {
+  } catch {
     console.log('ℹ️  No assets directory found');
   }
 
@@ -1707,7 +1711,7 @@ async function copyAssets(): Promise<void> {
       overwrite: true,
     });
     console.log('✅ favicon.ico copied to dist/');
-  } catch (error) {
+  } catch {
     // Ignore if not present
   }
 }
@@ -1736,7 +1740,7 @@ async function optimizeImages(): Promise<void> {
           await findImages(fullPath, relativePath);
         }
       }
-    } catch (error) {
+    } catch {
       console.log(`ℹ️  Could not read directory ${dir}`);
     }
   }
@@ -1817,7 +1821,7 @@ async function optimizeImages(): Promise<void> {
             );
             // Optionally remove the .webp from source
             await Deno.remove(webpSource);
-          } catch (err) {
+          } catch {
             console.error(
               `❌ Failed to move/copy webp: ${webpSource} to ${outputPath}`
             );
@@ -1836,7 +1840,7 @@ async function optimizeImages(): Promise<void> {
 
     console.log('✅ Image optimization complete!');
     // No need to update HTML references
-  } catch (error) {
+  } catch {
     console.log('ℹ️  Image optimization failed');
   }
 }
@@ -1911,7 +1915,6 @@ async function build(): Promise<void> {
     try {
       for await (const entry of Deno.readDir(dir)) {
         if (entry.isFile && entry.name.endsWith('.md')) {
-          const relativePath = join(basePath, entry.name);
           markdownFiles.push(join(dir, entry.name));
         } else if (entry.isDirectory) {
           const subDir = join(dir, entry.name);
@@ -1919,14 +1922,14 @@ async function build(): Promise<void> {
           await scanDirectory(subDir, subBasePath);
         }
       }
-    } catch (error) {
+    } catch {
       console.error(`❌ Could not read directory ${dir}`);
     }
   }
 
   try {
     await scanDirectory(routesDir);
-  } catch (error) {
+  } catch {
     console.error('❌ Routes directory not found.');
     return;
   }

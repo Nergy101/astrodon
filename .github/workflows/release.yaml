@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0 # Fetch all history for changelog generation
 
@@ -55,7 +55,7 @@ jobs:
           echo "📦 Detected Deno version requirement: $DENO_VERSION"
 
       - name: Setup Deno
-        uses: denoland/setup-deno@v1
+        uses: denoland/setup-deno@v2
         with:
           deno-version: ${{ steps.deno_version.outputs.DENO_VERSION }}
 
@@ -266,7 +266,7 @@ jobs:
           echo "✅ Successfully published to JSR"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.parse_tag.outputs.TAG_NAME }}
           name: ${{ steps.release_body.outputs.RELEASE_NAME }}

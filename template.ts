@@ -1,11 +1,11 @@
 export interface RenderContext {
+  // deno-lint-ignore no-explicit-any
   meta: Record<string, any>;
   path: string;
 }
 
 export function render(content: string, context: RenderContext): string {
   const meta = context.meta;
-  const path = context.path;
 
   // Replace literal \n with actual newlines
   content = content.replace(/\\n/g, '\n');
@@ -44,7 +44,7 @@ export function render(content: string, context: RenderContext): string {
   // Process blockquotes to clean up formatting
   let processedContent = content.replace(
     /<blockquote>(.*?)<\/blockquote>/gs,
-    (match, quoteText) => {
+    (_match, quoteText) => {
       // Clean up literal \n characters and extra whitespace
       quoteText = quoteText.replace(/\\n/g, '\n');
       quoteText = quoteText.replace(/^\n*/g, '');  // Remove leading newlines
@@ -69,7 +69,7 @@ export function render(content: string, context: RenderContext): string {
   );
 
   // Restore code blocks
-  processedContent = processedContent.replace(/__CODE_BLOCK_(\d+)__/g, (match, idx) => {
+  processedContent = processedContent.replace(/__CODE_BLOCK_(\d+)__/g, (_match, idx) => {
     const index = parseInt(idx, 10);
     return blocks[index] || '';
   });
