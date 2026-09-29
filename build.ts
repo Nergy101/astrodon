@@ -1,14 +1,9 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run
 
 import { copy, ensureDir } from '@std/fs';
-import {
-  basename,
-  dirname,
-  extname,
-  join,
-  relative,
-} from '@std/path';
+import { basename, dirname, extname, join, normalize, relative } from '@std/path';
 import { crypto } from '@std/crypto';
+import { parseMarkdownFrontmatter } from './frontmatter.ts';
 
 // Frontmatter is arbitrary YAML, so values are intentionally loosely typed.
 // deno-lint-ignore no-explicit-any
@@ -19,9 +14,59 @@ const fileCache = new Map<string, { hash: string; content: string }>();
 
 // Configurable directories via CLI flags
 function getArg(name: string, defaultValue: string): string {
-  const arg = Deno.args.find(a => a.startsWith(`--${name}=`));
+  const arg = Deno.args.find((a) => a.startsWith(`--${name}=`));
   if (!arg) return defaultValue;
   return arg.substring(name.length + 3);
+}
+
+function normalizeBasePath(path: string): string {
+  if (/[?#\\\\]/.test(path)) {
+    throw new Error(
+      `Invalid basePath '${path}': query, fragment, and backslash are not allowed`,
+    );
+  }
+  const segments = path.split('/').filter(Boolean);
+  if (
+    segments.some((segment) => {
+      try {
+        const decoded = decodeURIComponent(segment);
+        return decoded === '.' || decoded === '..';
+      } catch {
+        return true;
+      }
+    })
+  ) {
+    throw new Error(
+      `Invalid basePath '${path}': invalid or dot segments are not allowed`,
+    );
+  }
+  return segments.length === 0 ? '/' : `/${segments.join('/')}`;
+}
+
+function normalizeSiteUrl(value: string): string | undefined {
+  if (!value) return undefined;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(
+      `Invalid siteUrl '${value}': expected an absolute http(s) URL`,
+    );
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(
+      `Invalid siteUrl '${value}': expected an absolute http(s) URL`,
+    );
+  }
+  if (
+    url.pathname !== '/' || url.search || url.hash || url.username ||
+    url.password
+  ) {
+    throw new Error(
+      `Invalid siteUrl '${value}': configure only the site origin; use basePath for a subdirectory`,
+    );
+  }
+  return url.origin;
 }
 
 // Content and output directories (can be absolute or relative)
@@ -30,6 +75,8 @@ const outDir = getArg('outDir', './dist');
 const assetsDir = getArg('assetsDir', './assets');
 const componentsDir = getArg('componentsDir', './components');
 const templatePath = getArg('template', './template.ts');
+let basePath = '/';
+let siteUrl: string | undefined;
 
 // Simple hash function for file content
 async function getFileHash(content: string): Promise<string> {
@@ -37,13 +84,13 @@ async function getFileHash(content: string): Promise<string> {
   const data = encoder.encode(content);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 // Check if file needs reprocessing
 async function needsReprocessing(
   filePath: string,
-  content: string
+  content: string,
 ): Promise<boolean> {
   const cached = fileCache.get(filePath);
   if (!cached) return true;
@@ -56,10 +103,17 @@ async function needsReprocessing(
 async function updateCache(
   filePath: string,
   content: string,
-  processedContent: string
+  processedContent: string,
 ) {
   const hash = await getFileHash(content);
   fileCache.set(filePath, { hash, content: processedContent });
+}
+
+function isExternalUrl(value: string): boolean {
+  if (value.startsWith('//')) return true;
+  const schemeEnd = value.indexOf(':');
+  return schemeEnd > 0 &&
+    /^[A-Za-z][A-Za-z0-9+.-]*$/.test(value.slice(0, schemeEnd));
 }
 
 // Optimized markdown to HTML conversion with consolidated regex operations
@@ -73,7 +127,7 @@ function parseMarkdown(markdown: string): string {
     function (match, _scriptContent) {
       scriptBlocks.push(match);
       return `\n\n__SCRIPT_BLOCK_${scriptBlockIndex++}__\n\n`;
-    }
+    },
   );
 
   // Images - ensure proper asset paths with WebP fallback (process before links)
@@ -82,11 +136,7 @@ function parseMarkdown(markdown: string): string {
     (_match, alt, src) => {
       // Clean up src path
       let origSrc = src;
-      if (
-        !src.startsWith('http') &&
-        !src.startsWith('https') &&
-        !src.startsWith('/assets/')
-      ) {
+      if (!isExternalUrl(src) && !src.startsWith('/assets/')) {
         origSrc = `/assets/${src.replace(/^\.?\/?/, '')}`;
       }
 
@@ -115,7 +165,7 @@ function parseMarkdown(markdown: string): string {
         // If WebP doesn't exist, just use the original image
         return `<img src="${origSrc}" alt="${alt}">`;
       }
-    }
+    },
   );
 
   // Links (process after images to avoid conflicts)
@@ -123,8 +173,8 @@ function parseMarkdown(markdown: string): string {
     /\[([^\]]+)\]\(([^)]+)\)/g,
     (_match, text, url) => {
       // Add target="_blank" to all links
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
-    }
+      return `<a href="${url}" target="&#95;blank" rel="noopener noreferrer">${text}</a>`;
+    },
   );
 
   // --- CODE BLOCK HANDLING ---
@@ -141,7 +191,7 @@ function parseMarkdown(markdown: string): string {
         code: code, // preserve as-is
       });
       return `@@CODEBLOCK${rawCodeBlockIndex++}@@`;
-    }
+    },
   );
   // --- END CODE BLOCK HANDLING ---
 
@@ -154,12 +204,14 @@ function parseMarkdown(markdown: string): string {
         !/^@@CODEBLOCK\d+@@$/.test(p2.trim()) &&
         !/^__SCRIPT_BLOCK_\d+__$/.test(p2.trim())
       ) {
-        return `${p1}<pre><code class=\"language-html\">${p2
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')}</code></pre>`;
+        return `${p1}<pre><code class=\"language-html\">${
+          p2
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+        }</code></pre>`;
       }
       return match;
-    }
+    },
   );
 
   // --- NESTED LISTS HANDLING ---
@@ -191,10 +243,7 @@ function parseMarkdown(markdown: string): string {
         indent > listStack[listStack.length - 1].indent
       ) {
         for (
-          let j =
-            listStack.length > 0
-              ? listStack[listStack.length - 1].indent + 1
-              : 0;
+          let j = listStack.length > 0 ? listStack[listStack.length - 1].indent + 1 : 0;
           j <= indent && j < 3;
           j++
         ) {
@@ -307,26 +356,27 @@ function parseMarkdown(markdown: string): string {
 
   // --- TABLES HANDLING ---
   // Convert markdown tables to HTML tables before other regexes
-  markdown = markdown.replace(/((?:^\|.*\|.*\n)+)/gm, block => {
+  markdown = markdown.replace(/((?:^\|.*\|.*\n)+)/gm, (block) => {
     // Only process if block looks like a table (at least 2 lines, starts with |, has --- separator)
     const lines = block.trim().split(/\r?\n/);
     if (lines.length < 2) return block;
     if (
       !lines[0].startsWith('|') ||
       !lines[1].replace(/\s/g, '').match(/^\|?[-:|]+\|?$/)
-    )
+    ) {
       return block;
+    }
     // Parse header
     const headerCells = lines[0]
       .split('|')
       .slice(1, -1)
-      .map(cell => cell.trim());
+      .map((cell) => cell.trim());
     // Parse rows
-    const rows = lines.slice(2).map(row =>
+    const rows = lines.slice(2).map((row) =>
       row
         .split('|')
         .slice(1, -1)
-        .map(cell => cell.trim())
+        .map((cell) => cell.trim())
     );
     let html = '<table><thead><tr>';
     for (const cell of headerCells) html += `<th>${cell}</th>`;
@@ -346,11 +396,11 @@ function parseMarkdown(markdown: string): string {
   // Convert markdown task list items to HTML checkboxes
   markdown = markdown.replace(
     /<li>\s*\[x\]\s*(.*?)<\/li>/gi,
-    '<li class="task-list-item"><input type="checkbox" checked disabled> $1</li>'
+    '<li class="task-list-item"><input type="checkbox" checked disabled> $1</li>',
   );
   markdown = markdown.replace(
     /<li>\s*\[ \]\s*(.*?)<\/li>/gi,
-    '<li class="task-list-item"><input type="checkbox" disabled> $1</li>'
+    '<li class="task-list-item"><input type="checkbox" disabled> $1</li>',
   );
   // --- END TASK LISTS HANDLING ---
 
@@ -362,17 +412,17 @@ function parseMarkdown(markdown: string): string {
     (_match, abbr, def) => {
       abbrevDefs[abbr] = def;
       return '';
-    }
+    },
   );
   // Replace abbreviation references with <abbr> elements
-  Object.keys(abbrevDefs).forEach(abbr => {
+  Object.keys(abbrevDefs).forEach((abbr) => {
     const regex = new RegExp(
       `\\b${abbr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
-      'gi'
+      'gi',
     );
     markdown = markdown.replace(
       regex,
-      `<abbr title="${abbrevDefs[abbr]}">${abbr}</abbr>`
+      `<abbr title="${abbrevDefs[abbr]}">${abbr}</abbr>`,
     );
   });
   // --- END ABBREVIATIONS HANDLING ---
@@ -385,7 +435,7 @@ function parseMarkdown(markdown: string): string {
     (_match, name, def) => {
       footnoteDefs[name] = def.trim();
       return '';
-    }
+    },
   );
 
   // Also handle footnote definitions that might be at the end of content
@@ -396,7 +446,7 @@ function parseMarkdown(markdown: string): string {
         footnoteDefs[name] = def.trim();
       }
       return '';
-    }
+    },
   );
 
   // Replace footnote references with numbered links (but not definitions)
@@ -470,11 +520,11 @@ function parseMarkdown(markdown: string): string {
     // Inline code (but not inside code block placeholders)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     // Multi-line blockquotes (process before paragraph wrapping)
-    .replace(/((?:^\s*> .*$\n?)+)/gm, match => {
+    .replace(/((?:^\s*> .*$\n?)+)/gm, (match) => {
       const lines = match.trim().split(/\r?\n/);
       const content = lines
-        .map(line => line.replace(/^\s*> ?/, '')) // Remove > and leading spaces
-        .filter(line => line.trim() !== '') // Remove empty lines
+        .map((line) => line.replace(/^\s*> ?/, '')) // Remove > and leading spaces
+        .filter((line) => line.trim() !== '') // Remove empty lines
         .join(' ');
       return `<blockquote>${content}</blockquote>`;
     })
@@ -485,7 +535,7 @@ function parseMarkdown(markdown: string): string {
     // Only add <br> for single newlines that are not between list items or other block elements
     .replace(
       /(?<!<\/li>)\n(?!<[uo]l>|<li>|<\/[uo]l>|<dl>|<dt>|<dd>|<\/dl>|<table>|<thead>|<tbody>|<tr>|<th>|<td>|<\/table>|<\/thead>|<\/tbody>|<\/tr>|<\/th>|<\/td>|<div|<\/div>|<h[1-6]>|<\/h[1-6]>|<p>|<\/p>|<blockquote>|<\/blockquote>|<hr>|<pre>|<\/pre>|<code>|<\/code>|<strong>|<\/strong>|<em>|<\/em>|<del>|<\/del>|<a\b|<\/a>|<img\b|<\/img>|<abbr>|<\/abbr>|<sup>|<\/sup>|<span>|<\/span>)/g,
-      '<br>'
+      '<br>',
     )
     // Wrap in paragraphs (exclude HTML elements, blockquotes, and code block placeholders)
     .replace(/^(?!<[^>]*>)(?!> )(?!@@CODEBLOCK\d+@@)(.*)$/gm, '<p>$1</p>')
@@ -510,36 +560,36 @@ function parseMarkdown(markdown: string): string {
     .replace(/<\/div>\s*<br>/g, '</div>')
     .replace(
       /<br>\s*<div class="blog-card-header">/g,
-      '<div class="blog-card-header">'
+      '<div class="blog-card-header">',
     )
     .replace(
       /<br>\s*<div class="blog-card-meta">/g,
-      '<div class="blog-card-meta">'
+      '<div class="blog-card-meta">',
     )
     .replace(
       /<br>\s*<div class="blog-card-tags">/g,
-      '<div class="blog-card-tags">'
+      '<div class="blog-card-tags">',
     )
     .replace(
       /<br>\s*<h3 class="blog-card-title">/g,
-      '<h3 class="blog-card-title">'
+      '<h3 class="blog-card-title">',
     )
     .replace(/<br>\s*<a class="blog-card-link">/g, '<a class="blog-card-link">')
     .replace(
       /<br>\s*<span class="blog-card-date">/g,
-      '<span class="blog-card-date">'
+      '<span class="blog-card-date">',
     )
     .replace(
       /<br>\s*<span class="blog-card-author">/g,
-      '<span class="blog-card-author">'
+      '<span class="blog-card-author">',
     )
     .replace(
       /<br>\s*<span class="blog-card-tag">/g,
-      '<span class="blog-card-tag">'
+      '<span class="blog-card-tag">',
     )
     .replace(
       /<br>\s*<p class="blog-card-excerpt">/g,
-      '<p class="blog-card-excerpt">'
+      '<p class="blog-card-excerpt">',
     )
     // Remove <br> tags that appear between HTML elements
     .replace(/>\s*<br>\s*</g, '> <')
@@ -577,9 +627,11 @@ function parseMarkdown(markdown: string): string {
           return rawLang || 'plaintext';
       }
     })();
-    const uniqueId = `code-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
+    const uniqueId = `code-${Date.now()}-${
+      Math.random()
+        .toString(36)
+        .substr(2, 9)
+    }`;
 
     return `<div class="code-block-container" data-language="${language}" id="${uniqueId}">
             <div class="code-block-header">
@@ -599,18 +651,19 @@ function parseMarkdown(markdown: string): string {
   markdown = markdown.replace(
     /\{\{htmlcode\}\}([\s\S]*?)\{\{\/htmlcode\}\}/g,
     (_match, code) => {
-      return `<pre><code class=\"language-html\">${code
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')}</code></pre>`;
-    }
+      return `<pre><code class=\"language-html\">${
+        code
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+      }</code></pre>`;
+    },
   );
 
   // Process existing HTML <img> tags (not already in <picture> elements) to add WebP support
   // First, protect img tags that are already inside picture elements
-  const pictureImgPattern =
-    /<picture>[\s\S]*?<img\s+[^>]*?>[\s\S]*?<\/picture>/gi;
+  const pictureImgPattern = /<picture>[\s\S]*?<img\s+[^>]*?>[\s\S]*?<\/picture>/gi;
   const protectedImages: string[] = [];
-  markdown = markdown.replace(pictureImgPattern, match => {
+  markdown = markdown.replace(pictureImgPattern, (match) => {
     protectedImages.push(match);
     return `__PROTECTED_IMG_${protectedImages.length - 1}__`;
   });
@@ -624,14 +677,8 @@ function parseMarkdown(markdown: string): string {
     }
     const src = srcMatch[1];
 
-    // Skip external URLs and data URIs
-    if (
-      src.startsWith('http://') ||
-      src.startsWith('https://') ||
-      src.startsWith('data:')
-    ) {
-      return match;
-    }
+    // Leave all absolute and protocol-relative asset URLs untouched.
+    if (isExternalUrl(src)) return match;
 
     // Clean up src path
     let origSrc = src;
@@ -657,20 +704,20 @@ function parseMarkdown(markdown: string): string {
       webpExists = false;
     }
 
-      // Replace with WebP directly if it exists, otherwise use original
-      if (webpExists) {
-        // Update src attribute to use WebP version
-        const updatedAttrs = attrs.replace(
-          /src=["'][^"']+["']/i,
-          `src="${webpSrc}"`
-        );
-        return `<img ${updatedAttrs}>`;
-      } else {
+    // Replace with WebP directly if it exists, otherwise use original
+    if (webpExists) {
+      // Update src attribute to use WebP version
+      const updatedAttrs = attrs.replace(
+        /src=["'][^"']+["']/i,
+        `src="${webpSrc}"`,
+      );
+      return `<img ${updatedAttrs}>`;
+    } else {
       // If WebP doesn't exist, return original img tag with updated src if needed
       if (origSrc !== src) {
         const updatedAttrs = attrs.replace(
           /src=["'][^"']+["']/i,
-          `src="${origSrc}"`
+          `src="${origSrc}"`,
         );
         return `<img ${updatedAttrs}>`;
       }
@@ -1168,7 +1215,7 @@ async function loadComponentHtml(name: string): Promise<string> {
 // Process TOC marker and replace with dynamic content cards
 async function processTOCMarker(
   content: string,
-  filePath: string
+  filePath: string,
 ): Promise<string> {
   const marker = '{{routes:toc}}';
   if (!content.includes(marker)) {
@@ -1205,24 +1252,19 @@ async function processTOCMarker(
       ) {
         const entryPath = join(targetDir, entry.name);
         const content = await Deno.readTextFile(entryPath);
-        const meta = extractMetadata(content);
+        const parsed = parseMarkdownFrontmatter(content, entryPath);
+        const meta = withPageDefaults(parsed.metadata as Meta, entryPath);
 
-        // Extract excerpt (first paragraph after frontmatter)
+        // Extract excerpt (first paragraph after optional frontmatter)
         let excerpt = '';
-        if (content.startsWith('---')) {
-          const endIndex = content.indexOf('---', 3);
-          if (endIndex !== -1) {
-            const markdownContent = content.substring(endIndex + 3).trim();
-            const firstParagraph = markdownContent.split('\n\n')[0];
-            // Remove markdown formatting for excerpt
-            excerpt =
-              firstParagraph
-                .replace(/^#+\s*/, '') // Remove headers
-                .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold
-                .replace(/\*(.*?)\*/g, '$1') // Remove italic
-                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links
-                .substring(0, 150) + (firstParagraph.length > 150 ? '...' : '');
-          }
+        const firstParagraph = parsed.body.split('\n\n')[0] ?? '';
+        if (firstParagraph) {
+          excerpt = firstParagraph
+            .replace(/^#+\s*/, '') // Remove headers
+            .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold
+            .replace(/\*(.*?)\*/g, '$1') // Remove italic
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links
+            .substring(0, 150) + (firstParagraph.length > 150 ? '...' : '');
         }
 
         const filename = basename(entry.name, '.md');
@@ -1259,41 +1301,37 @@ async function processTOCMarker(
       // Blog-style cards with metadata
       cardsHTML = posts
         .map(
-          post =>
+          (post) =>
             `<div class="blog-card">
     <a href="${post.url}" class="blog-card-link-wrapper">
         <div class="blog-card-header">
             <h3 class="blog-card-title">${post.title}</h3>
             <div class="blog-card-meta">
                 <span class="blog-card-date">${post.date}</span>
-                ${
-                  post.author
-                    ? `<span class="blog-card-author">by ${post.author}</span>`
-                    : ''
-                }
+                ${post.author ? `<span class="blog-card-author">by ${post.author}</span>` : ''}
             </div>
         </div>
+        ${post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ''}
         ${
-          post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ''
-        }
-        ${
-          post.tags.length > 0
-            ? `<div class="blog-card-tags">
-            ${post.tags
-              .map(tag => `<span class="blog-card-tag">${tag}</span>`)
-              .join('')}
+              post.tags.length > 0
+                ? `<div class="blog-card-tags">
+            ${
+                  post.tags
+                    .map((tag) => `<span class="blog-card-tag">${tag}</span>`)
+                    .join('')
+                }
         </div>`
-            : ''
-        }
+                : ''
+            }
     </a>
-</div>`
+</div>`,
         )
         .join('');
     } else {
       // Generic content cards for other directories
       cardsHTML = posts
         .map(
-          post =>
+          (post) =>
             `<div class="content-card">
     <a href="${post.url}" class="content-card-link-wrapper">
         <div class="content-card-header">
@@ -1302,31 +1340,25 @@ async function processTOCMarker(
               post.date
                 ? `<div class="content-card-meta">
                 <span class="content-card-date">${post.date}</span>
-                ${
-                  post.author
-                    ? `<span class="content-card-author">by ${post.author}</span>`
-                    : ''
-                }
+                ${post.author ? `<span class="content-card-author">by ${post.author}</span>` : ''}
             </div>`
                 : ''
             }
         </div>
+        ${post.excerpt ? `<p class="content-card-excerpt">${post.excerpt}</p>` : ''}
         ${
-          post.excerpt
-            ? `<p class="content-card-excerpt">${post.excerpt}</p>`
-            : ''
-        }
-        ${
-          post.tags.length > 0
-            ? `<div class="content-card-tags">
-            ${post.tags
-              .map(tag => `<span class="content-card-tag">${tag}</span>`)
-              .join('')}
+              post.tags.length > 0
+                ? `<div class="content-card-tags">
+            ${
+                  post.tags
+                    .map((tag) => `<span class="content-card-tag">${tag}</span>`)
+                    .join('')
+                }
         </div>`
-            : ''
-        }
+                : ''
+            }
     </a>
-</div>`
+</div>`,
         )
         .join('');
     }
@@ -1337,7 +1369,7 @@ async function processTOCMarker(
     console.error(`❌ Error processing TOC marker for ${filePath}:`, error);
     return content.replace(
       marker,
-      `<p>Error loading content from ${directory}.</p>`
+      `<p>Error loading content from ${directory}.</p>`,
     );
   }
 }
@@ -1346,7 +1378,7 @@ async function processTOCMarker(
 async function processTemplate(
   mdPath: string,
   content: string,
-  meta: Meta
+  meta: Meta,
 ): Promise<string> {
   try {
     // Convert relative path to absolute file:// URL for import
@@ -1392,7 +1424,10 @@ async function processMarkdownFile(filePath: string): Promise<PageData> {
       console.log(`⚡ Using cached result for ${filePath}`);
       buildMetrics.cachedFiles++;
       // We still need to parse metadata for the return value
-      const meta = extractMetadata(content);
+      const meta = withPageDefaults(
+        extractMetadata(content, filePath),
+        filePath,
+      );
       return {
         content: cached.content,
         meta,
@@ -1401,16 +1436,10 @@ async function processMarkdownFile(filePath: string): Promise<PageData> {
     }
   }
 
-  // Extract frontmatter if present
-  const meta = extractMetadata(content);
-  let markdownContent = content;
-
-  if (content.startsWith('---')) {
-    const endIndex = content.indexOf('---', 3);
-    if (endIndex !== -1) {
-      markdownContent = content.substring(endIndex + 3).trim();
-    }
-  }
+  // Parse frontmatter and preserve files that intentionally omit metadata.
+  const parsed = parseMarkdownFrontmatter(content, filePath);
+  const meta = withPageDefaults(parsed.metadata as Meta, filePath);
+  const markdownContent = parsed.body;
 
   // Process TOC marker if present
   const tocProcessedContent = await processTOCMarker(markdownContent, filePath);
@@ -1431,36 +1460,21 @@ async function processMarkdownFile(filePath: string): Promise<PageData> {
   };
 }
 
-// Extract metadata from markdown content
-function extractMetadata(content: string): Meta {
-  const meta: Meta = {};
+// Extract optional YAML metadata; pages without a delimited block remain valid.
+function extractMetadata(content: string, filePath: string): Meta {
+  return parseMarkdownFrontmatter(content, filePath).metadata as Meta;
+}
 
-  if (content.startsWith('---')) {
-    const endIndex = content.indexOf('---', 3);
-    if (endIndex !== -1) {
-      const frontmatter = content.substring(3, endIndex).trim();
+function defaultPageTitle(filePath: string): string {
+  const name = basename(filePath, '.md').replace(/[-_]+/g, ' ');
+  return name.replace(/\b[a-z]/g, (character) => character.toUpperCase());
+}
 
-      // Simple YAML-like parsing
-      for (const line of frontmatter.split('\n')) {
-        const colonIndex = line.indexOf(':');
-        if (colonIndex !== -1) {
-          const key = line.substring(0, colonIndex).trim();
-          const value = line.substring(colonIndex + 1).trim();
-
-          // Handle YAML arrays like [tag1, tag2]
-          if (value.startsWith('[') && value.endsWith(']')) {
-            const arrayContent = value.substring(1, value.length - 1);
-            const arrayItems = arrayContent.split(',').map(item => item.trim());
-            meta[key] = arrayItems;
-          } else {
-            meta[key] = value;
-          }
-        }
-      }
-    }
+function withPageDefaults(metadata: Meta, filePath: string): Meta {
+  if (typeof metadata.title !== 'string' || !metadata.title.trim()) {
+    metadata.title = defaultPageTitle(filePath);
   }
-
-  return meta;
+  return metadata;
 }
 
 // Helper function to check if WebP logo exists
@@ -1474,11 +1488,100 @@ function checkWebPLogoExists(): boolean {
   }
 }
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function pageRoutePath(filePath: string): string {
+  const relativePath = relative(contentDir, filePath).split('\\\\').join('/');
+  const routePath = relativePath.endsWith('.md') ? relativePath.slice(0, -3) : relativePath;
+  const route = basename(filePath, '.md') === 'index'
+    ? dirname(routePath) === '.' ? '' : dirname(routePath)
+    : routePath;
+  return route ? `/${route}` : '/';
+}
+
+function publicPath(routePath: string): string {
+  const normalizedRoute = routePath.startsWith('/') ? routePath : `/${routePath}`;
+  if (basePath === '/') return normalizedRoute;
+  return normalizedRoute === '/' ? `${basePath}/` : `${basePath}${normalizedRoute}`;
+}
+
+function absolutePageUrl(routePath: string): string | undefined {
+  return siteUrl ? `${siteUrl}${publicPath(routePath)}` : undefined;
+}
+
+function prefixInternalUrl(value: string): string {
+  if (
+    basePath === '/' || !value.startsWith('/') || value.startsWith('//') ||
+    value === basePath || value.startsWith(`${basePath}/`)
+  ) return value;
+  return `${basePath}${value}`;
+}
+
+function prefixInternalUrls(html: string): string {
+  if (basePath === '/') return html;
+  return html.replace(
+    /((?:href|src|srcset|poster|action|data-src)=["'])([^"']*)(["'])/gi,
+    (_match, prefix, rawValue, quote) => {
+      const value = String(rawValue);
+      const rewritten = /srcset/i.test(prefix)
+        ? value.split(',').map((candidate: string) => {
+          const parts = candidate.trim().split(' ', 2);
+          return [prefixInternalUrl(parts[0]), parts[1]].filter(Boolean).join(
+            ' ',
+          );
+        }).join(', ')
+        : prefixInternalUrl(value);
+      return `${prefix}${rewritten}${quote}`;
+    },
+  );
+}
+
+function generateSeoMetadata(meta: Meta, routePath: string): string {
+  if (!siteUrl) return '';
+  const canonical = typeof meta.canonical === 'string' &&
+      (meta.canonical.startsWith('https://') ||
+        meta.canonical.startsWith('http://'))
+    ? meta.canonical
+    : absolutePageUrl(routePath)!;
+  const title = meta.ogTitle ?? meta.title ?? defaultPageTitle(routePath);
+  const description = meta.ogDescription ?? meta.description;
+  const image = meta.ogImage ?? meta.image ?? meta.cover;
+  const tags = [
+    `<link rel="canonical" href="${escapeHtml(canonical)}">`,
+    `<meta property="og:title" content="${escapeHtml(title)}">`,
+    `<meta property="og:url" content="${escapeHtml(canonical)}">`,
+    `<meta property="og:type" content="${escapeHtml(meta.ogType ?? meta.type ?? 'website')}">`,
+  ];
+  if (description) {
+    tags.push(`<meta name="description" content="${escapeHtml(description)}">`);
+    tags.push(
+      `<meta property="og:description" content="${escapeHtml(description)}">`,
+    );
+  }
+  if (image) {
+    const imageValue = String(image);
+    const imageUrl = isExternalUrl(imageValue) ? imageValue : `${siteUrl}${
+      prefixInternalUrl(
+        imageValue.startsWith('/') ? imageValue : `/${imageValue}`,
+      )
+    }`;
+    tags.push(`<meta property="og:image" content="${escapeHtml(imageUrl)}">`);
+  }
+  return tags.join(String.fromCharCode(10) + '    ');
+}
+
 // Generate HTML from template
 async function generateHTML(
   content: string,
   meta: Meta,
-  navigation: string
+  navigation: string,
+  routePath: string,
 ): Promise<string> {
   let html = DEFAULT_TEMPLATE;
 
@@ -1492,18 +1595,19 @@ async function generateHTML(
     // WebP exists, use picture element with WebP source
     html = html.replace(
       '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture>',
-      '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture>'
+      '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"></picture>',
     );
   } else {
     // WebP doesn't exist, use just the original image
     html = html.replace(
       '<picture><source srcset="/assets/nemic-logos/logo.webp" type="image/webp"><img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"><span class="navbar-brand-text">Nergy\'s Blog</span>',
-      '<img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"><span class="navbar-brand-text">Nergy\'s Blog</span>'
+      '<img src="/assets/nemic-logos/logo.png" alt="Logo" class="navbar-logo"><span class="navbar-brand-text">Nergy\'s Blog</span>',
     );
   }
 
   // Replace template variables
-  html = html.replace('{{title}}', meta.title + ' | Nergy' || "Nergy's Blog");
+  const pageTitle = String(meta.title || "Nergy's Blog");
+  html = html.replace('{{title}}', `${escapeHtml(pageTitle)} | Nergy`);
   html = html.replace('{{content}}', content);
   html = html.replace('{{navigation}}', navigation);
 
@@ -1515,9 +1619,13 @@ async function generateHTML(
     <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
     `;
 
-  html = html.replace('</head>', additionalScripts + '</head>');
+  const seoMetadata = generateSeoMetadata(meta, routePath);
+  html = html.replace(
+    '</head>',
+    `${seoMetadata}${seoMetadata ? '\n    ' : ''}${additionalScripts}</head>`,
+  );
 
-  return html;
+  return prefixInternalUrls(html);
 }
 
 // Generate navigation from routes directory
@@ -1531,8 +1639,7 @@ async function generateNavigation(): Promise<NavItem[]> {
         const fileName = basename(entry.name, '.md');
         if (fileName !== 'index') {
           navItems.push({
-            title:
-              fileName.charAt(0).toUpperCase() +
+            title: fileName.charAt(0).toUpperCase() +
               fileName.slice(1).replace(/_/g, ' '),
             url: `/${fileName}`,
           });
@@ -1543,9 +1650,11 @@ async function generateNavigation(): Promise<NavItem[]> {
 
         // Scan subdirectory for markdown files
         try {
-          for await (const subEntry of Deno.readDir(
-            join(routesDir, folderName)
-          )) {
+          for await (
+            const subEntry of Deno.readDir(
+              join(routesDir, folderName),
+            )
+          ) {
             if (
               subEntry.isFile &&
               subEntry.name.endsWith('.md') &&
@@ -1556,13 +1665,15 @@ async function generateNavigation(): Promise<NavItem[]> {
 
               // Read file content to extract metadata
               let date = '';
-              let title =
-                fileName.charAt(0).toUpperCase() +
+              let title = fileName.charAt(0).toUpperCase() +
                 fileName.slice(1).replace(/_/g, ' ').replace(/-/g, ' ');
 
               try {
                 const content = await Deno.readTextFile(filePath);
-                const meta = extractMetadata(content);
+                const meta = withPageDefaults(
+                  extractMetadata(content, filePath),
+                  filePath,
+                );
                 if (meta.date) {
                   date = meta.date;
                 }
@@ -1600,8 +1711,7 @@ async function generateNavigation(): Promise<NavItem[]> {
 
         if (children.length > 0) {
           navItems.push({
-            title:
-              folderName.charAt(0).toUpperCase() +
+            title: folderName.charAt(0).toUpperCase() +
               folderName.slice(1).replace(/_/g, ' '),
             url: `/${folderName}`,
             children,
@@ -1619,16 +1729,15 @@ async function generateNavigation(): Promise<NavItem[]> {
 // Generate navigation HTML
 function generateNavigationHTML(
   navItems: NavItem[],
-  currentPath: string = ''
+  currentPath: string = '',
 ): string {
   let html = '';
 
   for (const item of navItems) {
     if (item.children && item.children.length > 0) {
       // Check if current page is in this dropdown
-      const isActive =
-        currentPath === item.url ||
-        item.children.some(child => currentPath === child.url);
+      const isActive = currentPath === item.url ||
+        item.children.some((child) => currentPath === child.url);
       const activeClass = isActive ? ' active' : '';
 
       // Dropdown menu
@@ -1650,9 +1759,7 @@ function generateNavigationHTML(
       // Add child items
       for (const child of item.children) {
         const isChildActive = currentPath === child.url;
-        html += `<a href="${child.url}" class="nav-dropdown-item${
-          isChildActive ? ' active' : ''
-        }">${child.title}</a>`;
+        html += `<a href="${child.url}" class="nav-dropdown-item${isChildActive ? ' active' : ''}">${child.title}</a>`;
       }
       html += `</div>`;
       html += `</li>`;
@@ -1660,9 +1767,7 @@ function generateNavigationHTML(
       // Regular link
       const isActive = currentPath === item.url;
       html += `<li class="nav-item${isActive ? ' active' : ''}">`;
-      html += `<a href="${item.url}" class="nav-link${
-        isActive ? ' active' : ''
-      }">${item.title}</a>`;
+      html += `<a href="${item.url}" class="nav-link${isActive ? ' active' : ''}">${item.title}</a>`;
       html += `</li>`;
     }
   }
@@ -1678,7 +1783,10 @@ async function copyAssets(): Promise<void> {
     await ensureDir(distAssetsDir);
 
     // Copy all assets recursively, including images
-    const copyAssetRecursively = async (dir: string, basePath: string = ''): Promise<void> => {
+    const copyAssetRecursively = async (
+      dir: string,
+      basePath: string = '',
+    ): Promise<void> => {
       try {
         for await (const entry of Deno.readDir(dir)) {
           const sourcePath = join(dir, entry.name);
@@ -1697,7 +1805,7 @@ async function copyAssets(): Promise<void> {
       } catch {
         console.log(`ℹ️  Could not read directory ${dir}`);
       }
-    }
+    };
 
     await copyAssetRecursively(assetsDir);
     console.log('✅ All assets copied to dist/assets/');
@@ -1780,7 +1888,7 @@ async function optimizeImages(): Promise<void> {
       try {
         const outputPath = join(
           distAssetsDir,
-          relativePath.replace(/\.[^.]+$/, '.webp')
+          relativePath.replace(/\.[^.]+$/, '.webp'),
         );
 
         // Skip if already optimized and up-to-date in dist
@@ -1817,20 +1925,20 @@ async function optimizeImages(): Promise<void> {
           try {
             await copy(webpSource, outputPath, { overwrite: true });
             console.log(
-              `✅ Optimized ${relativePath} → ${basename(outputPath)}`
+              `✅ Optimized ${relativePath} → ${basename(outputPath)}`,
             );
             // Optionally remove the .webp from source
             await Deno.remove(webpSource);
           } catch {
             console.error(
-              `❌ Failed to move/copy webp: ${webpSource} to ${outputPath}`
+              `❌ Failed to move/copy webp: ${webpSource} to ${outputPath}`,
             );
           }
         } else {
           const error = new TextDecoder().decode(stderr);
           console.error(
             `❌ Failed to optimize ${relativePath}:`,
-            error.toString()
+            error.toString(),
           );
         }
       } catch (error) {
@@ -1843,6 +1951,27 @@ async function optimizeImages(): Promise<void> {
   } catch {
     console.log('ℹ️  Image optimization failed');
   }
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+async function writeSitemap(markdownFiles: string[]): Promise<void> {
+  if (!siteUrl) return;
+  const locations = markdownFiles
+    .map((filePath) => absolutePageUrl(pageRoutePath(filePath)))
+    .filter((url): url is string => Boolean(url))
+    .sort();
+  const entries = locations.map((url) => `  <url><loc>${escapeXml(url)}</loc></url>`).join('\n');
+  const sitemap =
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries}\n</urlset>\n`;
+  await Deno.writeTextFile(join(outDir, 'sitemap.xml'), sitemap);
 }
 
 // Performance monitoring
@@ -1864,13 +1993,12 @@ function startBuildTimer() {
 
 function logBuildMetrics() {
   const totalTime = performance.now() - buildMetrics.startTime;
-  const avgProcessingTime =
-    buildMetrics.processedFiles > 0
-      ? Array.from(buildMetrics.fileProcessingTimes.values()).reduce(
-          (a, b) => a + b,
-          0
-        ) / buildMetrics.processedFiles
-      : 0;
+  const avgProcessingTime = buildMetrics.processedFiles > 0
+    ? Array.from(buildMetrics.fileProcessingTimes.values()).reduce(
+      (a, b) => a + b,
+      0,
+    ) / buildMetrics.processedFiles
+    : 0;
 
   console.log('\n📊 Build Performance Metrics:');
   console.log(`⏱️  Total build time: ${totalTime.toFixed(2)}ms`);
@@ -1892,13 +2020,116 @@ function logBuildMetrics() {
   }
 }
 
+function outputPathForMarkdown(filePath: string): string {
+  const relativePath = relative(contentDir, filePath);
+  const withoutExtension = relativePath.endsWith('.md') ? relativePath.slice(0, -3) : relativePath;
+  if (basename(filePath, '.md') === 'index') {
+    const directory = dirname(withoutExtension);
+    return join(
+      outDir,
+      directory === '.' ? 'index.html' : join(directory, 'index.html'),
+    );
+  }
+  return join(outDir, `${withoutExtension}.html`);
+}
+
+async function findOutputCollisions(
+  markdownFiles: string[],
+): Promise<string[]> {
+  const planned = new Map<string, { path: string; source: string }>();
+  const collisions = new Set<string>();
+  const separator = Deno.build.os === 'windows' ? String.fromCharCode(92) : '/';
+  const register = (path: string, source: string) => {
+    const normalizedPath = normalize(path);
+    const key = Deno.build.os === 'windows' ? normalizedPath.toLowerCase() : normalizedPath;
+    let collisionFound = false;
+    for (const [existingKey, previous] of planned) {
+      if (
+        key === existingKey || key.startsWith(`${existingKey}${separator}`) ||
+        existingKey.startsWith(`${key}${separator}`)
+      ) {
+        collisions.add(
+          `Output path collision at ${normalizedPath}: ${previous.source} and ${source}`,
+        );
+        collisionFound = true;
+      }
+    }
+    if (!collisionFound) planned.set(key, { path: normalizedPath, source });
+  };
+
+  for (const filePath of markdownFiles) {
+    register(outputPathForMarkdown(filePath), `page ${filePath}`);
+  }
+
+  let imageOptimizerAvailable: boolean | undefined;
+  async function scanAssets(
+    directory: string,
+    relativePath = '',
+  ): Promise<void> {
+    let entries: Deno.DirEntry[];
+    try {
+      entries = [];
+      for await (const entry of Deno.readDir(directory)) entries.push(entry);
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound && relativePath === '') return;
+      throw error;
+    }
+
+    for (const entry of entries) {
+      const sourcePath = join(directory, entry.name);
+      const assetPath = relativePath ? join(relativePath, entry.name) : entry.name;
+      if (entry.isDirectory) {
+        await scanAssets(sourcePath, assetPath);
+      } else if (entry.isFile) {
+        register(join(outDir, 'assets', assetPath), `asset ${sourcePath}`);
+        if (assetPath === 'favicon.ico') {
+          register(
+            join(outDir, 'favicon.ico'),
+            `root favicon copied from ${sourcePath}`,
+          );
+        }
+        const assetExtension = extname(assetPath);
+        if (
+          ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'].includes(
+            assetExtension.toLowerCase(),
+          )
+        ) {
+          if (imageOptimizerAvailable === undefined) {
+            try {
+              const result = await new Deno.Command('optimizt', {
+                args: ['--help'],
+                stdout: 'null',
+                stderr: 'null',
+              }).output();
+              imageOptimizerAvailable = result.code === 0;
+            } catch {
+              imageOptimizerAvailable = false;
+            }
+          }
+          if (imageOptimizerAvailable) {
+            const optimizedPath = `${assetPath.slice(0, -assetExtension.length)}.webp`;
+            register(
+              join(outDir, 'assets', optimizedPath),
+              `optimized WebP from ${sourcePath}`,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  await scanAssets(assetsDir);
+  if (siteUrl) register(join(outDir, 'sitemap.xml'), 'generated sitemap');
+  register(join(outDir, 'serve.ts'), 'generated development server');
+  return [...collisions];
+}
+
 // Main build function
 async function build(): Promise<void> {
   console.log('🚀 Starting build...');
   startBuildTimer();
-
-  // Ensure dist directory exists
-  await ensureDir(outDir);
+  basePath = normalizeBasePath(getArg('basePath', '/'));
+  siteUrl = normalizeSiteUrl(getArg('siteUrl', ''));
 
   // Generate navigation
   console.log('🧭 Generating navigation...');
@@ -1911,33 +2142,60 @@ async function build(): Promise<void> {
   const routesDir = contentDir;
   const markdownFiles: string[] = [];
 
-  async function scanDirectory(dir: string, basePath: string = '') {
-    try {
-      for await (const entry of Deno.readDir(dir)) {
-        if (entry.isFile && entry.name.endsWith('.md')) {
-          markdownFiles.push(join(dir, entry.name));
-        } else if (entry.isDirectory) {
-          const subDir = join(dir, entry.name);
-          const subBasePath = join(basePath, entry.name);
-          await scanDirectory(subDir, subBasePath);
-        }
+  async function scanDirectory(dir: string): Promise<void> {
+    for await (const entry of Deno.readDir(dir)) {
+      if (entry.isFile && entry.name.endsWith('.md')) {
+        markdownFiles.push(join(dir, entry.name));
+      } else if (entry.isDirectory) {
+        await scanDirectory(join(dir, entry.name));
       }
-    } catch {
-      console.error(`❌ Could not read directory ${dir}`);
     }
   }
 
   try {
     await scanDirectory(routesDir);
-  } catch {
-    console.error('❌ Routes directory not found.');
-    return;
+  } catch (error) {
+    throw new Error(
+      `Could not read routes directory '${routesDir}': ${String(error)}`,
+    );
   }
+  buildMetrics.totalFiles = markdownFiles.length;
 
   if (markdownFiles.length === 0) {
     console.log('ℹ️  No markdown files found in routes/');
+    const elapsed = performance.now() - buildMetrics.startTime;
+    console.log(
+      `✅ Build succeeded: 0 pages, 0 failed, 0 cached, ${elapsed.toFixed(2)}ms`,
+    );
+    logBuildMetrics();
     return;
   }
+
+  // Validate every delimited frontmatter block before creating or modifying output.
+  const frontmatterErrors: string[] = [];
+  for (const filePath of markdownFiles) {
+    try {
+      parseMarkdownFrontmatter(await Deno.readTextFile(filePath), filePath);
+    } catch (error) {
+      frontmatterErrors.push(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+  if (frontmatterErrors.length > 0) {
+    frontmatterErrors.forEach((error) => console.error(`❌ ${error}`));
+    throw new Error(
+      `Frontmatter validation failed for ${frontmatterErrors.length} file(s)`,
+    );
+  }
+
+  const collisions = await findOutputCollisions(markdownFiles);
+  if (collisions.length > 0) {
+    collisions.forEach((collision) => console.error(`❌ ${collision}`));
+    throw new Error(`${collisions.length} output path collision(s)`);
+  }
+
+  await ensureDir(outDir);
 
   // Copy assets and optimize images BEFORE processing markdown files
   // This ensures WebP files exist when parseMarkdown() checks for them
@@ -1949,9 +2207,8 @@ async function build(): Promise<void> {
 
   // Process markdown files in parallel for better performance
   console.log(`📝 Processing ${markdownFiles.length} markdown files...`);
-  buildMetrics.totalFiles = markdownFiles.length;
 
-  const processingPromises = markdownFiles.map(async filePath => {
+  const processingPromises = markdownFiles.map(async (filePath) => {
     const startTime = performance.now();
     console.log(`📝 Processing ${filePath}...`);
 
@@ -1985,29 +2242,11 @@ async function build(): Promise<void> {
       const html = await generateHTML(
         pageData.content,
         pageData.meta,
-        pageNavigationHTML
+        pageNavigationHTML,
+        pageRoutePath(filePath),
       );
 
-      // Determine output path
-      let outputPath;
-
-      if (fileName === 'index') {
-        if (relativePath === 'index') {
-          outputPath = join(outDir, 'index.html');
-        } else {
-          // index.md in a subdirectory
-          const dirName = dirname(relativePath);
-          outputPath = join(outDir, dirName, 'index.html');
-        }
-      } else {
-        if (relativePath === fileName) {
-          // Top-level file
-          outputPath = join(outDir, `${fileName}.html`);
-        } else {
-          // File in subdirectory
-          outputPath = join(outDir, `${relativePath}.html`);
-        }
-      }
+      const outputPath = outputPathForMarkdown(filePath);
 
       // Ensure output directory exists
       await ensureDir(dirname(outputPath));
@@ -2031,11 +2270,18 @@ async function build(): Promise<void> {
   // Wait for all files to be processed
   const results = await Promise.all(processingPromises);
 
-  // Log summary
-  const successful = results.filter(r => r.success).length;
-  const failed = results.filter(r => !r.success).length;
+  const successful = results.filter((r) => r.success).length;
+  const failed = results.filter((r) => !r.success).length;
+  if (failed > 0) {
+    throw new Error(
+      `Build failed: ${failed} of ${markdownFiles.length} pages could not be generated`,
+    );
+  }
+
+  await writeSitemap(markdownFiles);
+  const elapsed = performance.now() - buildMetrics.startTime;
   console.log(
-    `📊 Build summary: ${successful} files processed successfully, ${failed} failed`
+    `✅ Build succeeded: ${successful} pages, 0 failed, ${buildMetrics.cachedFiles} cached, ${elapsed.toFixed(2)}ms`,
   );
 
   // Copy serve.ts to dist for independent execution
@@ -2047,15 +2293,15 @@ async function build(): Promise<void> {
     // Patch specific Deno.readTextFile calls - be more precise
     serveSrc = serveSrc.replace(
       /Deno\.readTextFile\("\.\/dist" \+ htmlPath\)/g,
-      'Deno.readTextFile(htmlPath.slice(1))'
+      'Deno.readTextFile(htmlPath.slice(1))',
     );
     serveSrc = serveSrc.replace(
       /const indexPath = "\.\/dist\/index\.html";/g,
-      'const indexPath = "index.html";'
+      'const indexPath = "index.html";',
     );
     serveSrc = serveSrc.replace(
       /const indexContent = await Deno\.readTextFile\(indexPath\);/g,
-      'const indexContent = await Deno.readTextFile(indexPath);'
+      'const indexContent = await Deno.readTextFile(indexPath);',
     );
     await Deno.writeTextFile(join(outDir, 'serve.ts'), serveSrc);
     console.log('✅ serve.ts copied and patched to dist/');
@@ -2071,5 +2317,13 @@ async function build(): Promise<void> {
 
 // Run build if this script is executed directly
 if (import.meta.main) {
-  await build();
+  try {
+    await build();
+  } catch (error) {
+    logBuildMetrics();
+    console.error(
+      `❌ Build failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    Deno.exitCode = 1;
+  }
 }
