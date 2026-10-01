@@ -16,7 +16,7 @@ Or check out the look and feel on my blog https://blog.nergy.space
   "tasks": {
     "build": "deno run --allow-read --allow-write --allow-run build.ts",
     "serve": "deno run --allow-read --allow-net --allow-run serve.ts",
-    "dev": "deno task build && deno task serve"
+    "dev": "deno run --allow-read --allow-write --allow-run --allow-net dev.ts"
   },
   "imports": {
     "astrodon": "jsr:@nergy101/astrodon@0.2.7"
@@ -51,19 +51,58 @@ await serve({
 });
 ```
 
-5. Run
+Create `dev.ts` for rebuild-on-change and live reload:
 
-```bash
-deno task build
-deno task serve
-# open http://localhost:8000
+```ts
+import { watch } from "astrodon";
+
+await watch({
+  contentDir: new URL("./routes", import.meta.url).pathname,
+  outDir: new URL("./dist", import.meta.url).pathname,
+  assetsDir: new URL("./assets", import.meta.url).pathname,
+  componentsDir: new URL("./components", import.meta.url).pathname,
+  template: new URL("./template.ts", import.meta.url).pathname,
+  port: 8000,
+});
 ```
 
-Or use the combined dev task:
+5. Run the live-reloading development workflow
 
 ```bash
 deno task dev
+# open http://localhost:8000
 ```
+
+## Base paths and SEO metadata
+
+`BuildOptions.basePath` defaults to `/`. Set it for subdirectory deployments;
+Astrodon prefixes generated root-relative navigation links, Markdown links, and
+asset URLs while leaving absolute and external URLs alone. The development
+server/watch workflow also serves that prefix.
+
+`BuildOptions.siteUrl` is an optional absolute `http://` or `https://` site
+origin. When set, builds emit `sitemap.xml`, a canonical URL, and Open Graph
+metadata for each page. Page frontmatter fields `title`, `description`, and
+`image` supply the default Open Graph title, description, and image; `ogTitle`,
+`ogDescription`, `ogImage`, `ogType`, and an absolute `canonical` can override
+them.
+
+```ts
+await build({
+  contentDir: "./routes",
+  outDir: "./dist",
+  basePath: "/docs",
+  siteUrl: "https://example.com",
+});
+```
+
+## Frontmatter validation and compatibility
+
+Frontmatter is optional. Pages without a delimited metadata block continue to
+build, and their `<title>` defaults to a humanized filename. When frontmatter is
+present between matching `---` lines, Astrodon validates it as YAML before
+writing output. Invalid YAML stops the build with the source file and line
+number; no output is written. All metadata keys remain optional.
 
 ## Project layout (consumer)
 
