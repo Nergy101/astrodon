@@ -30,6 +30,14 @@ export interface BuildOptions {
   basePath?: string;
   /** Absolute site origin used for sitemap and canonical/Open Graph URLs */
   siteUrl?: string;
+  /** Site title suffix used in HTML <title> tags (default: 'Astrodon') */
+  siteTitle?: string;
+  /** Brand name shown in the default navbar (default: 'Astrodon') */
+  brandName?: string;
+  /** Optional logo image URL shown in the default navbar */
+  logo?: string;
+  /** Enable verbose build logging (default: false) */
+  verbose?: boolean;
 }
 
 /**
@@ -76,6 +84,10 @@ function getBuildScriptArgs(options: BuildOptions, pkgBase: URL): string[] {
     `--basePath=${options.basePath ?? '/'}`,
   ];
   if (options.siteUrl) args.push(`--siteUrl=${options.siteUrl}`);
+  if (options.siteTitle) args.push(`--siteTitle=${options.siteTitle}`);
+  if (options.brandName) args.push(`--brandName=${options.brandName}`);
+  if (options.logo) args.push(`--logo=${options.logo}`);
+  if (options.verbose) args.push('--verbose=true');
   return args;
 }
 
@@ -181,6 +193,10 @@ export async function build(options: BuildOptions): Promise<void> {
   );
   if (options.basePath) args.push(`--basePath=${options.basePath}`);
   if (options.siteUrl) args.push(`--siteUrl=${options.siteUrl}`);
+  if (options.siteTitle) args.push(`--siteTitle=${options.siteTitle}`);
+  if (options.brandName) args.push(`--brandName=${options.brandName}`);
+  if (options.logo) args.push(`--logo=${options.logo}`);
+  if (options.verbose) args.push('--verbose=true');
 
   const cmd = new Deno.Command('deno', {
     args,

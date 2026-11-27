@@ -11,26 +11,20 @@ import {
   buildTestSite,
   cleanupDir,
   createTestContent,
-  getBenchmarkDir,
   getTemplatePath,
 } from './utils/test-helpers.ts';
 
 Deno.test('Template Processing - Metadata rendering', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const outDir = join(benchmarkDir, 'dist-test-metadata');
+  const outDir = await Deno.makeTempDir({ prefix: 'astrodon-meta-' });
 
   try {
-    await cleanupDir(outDir);
     await buildBenchmarkBlog(outDir);
 
     const html = await Deno.readTextFile(
       join(outDir, 'testing', 'post-1.html')
     );
 
-    // Verify metadata is rendered from template.ts
-    // Note: Metadata might be in the content area, not necessarily as a separate div
-    // Check if author or tags are present in the HTML (they should be from template.ts)
-
+    assertStringIncludes(html, '<div class="metadata">');
     assertStringIncludes(
       html,
       'Test Author',
@@ -42,9 +36,9 @@ Deno.test('Template Processing - Metadata rendering', async () => {
 });
 
 Deno.test('Template Processing - Blockquote processing', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const testContentDir = join(benchmarkDir, 'routes-test-blockquote');
-  const outDir = join(benchmarkDir, 'dist-test-blockquote');
+  const root = await Deno.makeTempDir({ prefix: 'astrodon-blockquote-' });
+  const testContentDir = join(root, 'routes');
+  const outDir = join(root, 'dist');
 
   try {
     await createTestContent(
@@ -62,7 +56,6 @@ More content.
 `
     );
 
-    await cleanupDir(outDir);
     await buildTestSite({
       contentDir: testContentDir,
       outDir,
@@ -71,23 +64,17 @@ More content.
 
     const html = await Deno.readTextFile(join(outDir, 'test-blockquote.html'));
 
-    // Verify blockquotes are processed
     assertStringIncludes(html, '<blockquote>', 'Should have blockquote');
-    assertStringIncludes(html, 'Test Author', 'Should contain author');
-    // Cite tag might not always be present depending on formatting
-    // The important thing is that blockquotes are processed
+    assertStringIncludes(html, '<cite>- Test Author</cite>', 'Should render cite tag');
   } finally {
-    await cleanupDir(outDir);
-    await cleanupDir(testContentDir);
+    await cleanupDir(root);
   }
 });
 
 Deno.test('Template Processing - Frontmatter extraction', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const outDir = join(benchmarkDir, 'dist-test-frontmatter');
+  const outDir = await Deno.makeTempDir({ prefix: 'astrodon-fm-' });
 
   try {
-    await cleanupDir(outDir);
     await buildBenchmarkBlog(outDir);
 
     const html = await Deno.readTextFile(
@@ -110,9 +97,9 @@ Deno.test('Template Processing - Frontmatter extraction', async () => {
 });
 
 Deno.test('Template Processing - Custom frontmatter fields', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const testContentDir = join(benchmarkDir, 'routes-test-custom');
-  const outDir = join(benchmarkDir, 'dist-test-custom');
+  const root = await Deno.makeTempDir({ prefix: 'astrodon-custom-' });
+  const testContentDir = join(root, 'routes');
+  const outDir = join(root, 'dist');
 
   try {
     await createTestContent(
@@ -131,7 +118,6 @@ Content here.
 `
     );
 
-    await cleanupDir(outDir);
     await buildTestSite({
       contentDir: testContentDir,
       outDir,
@@ -143,8 +129,7 @@ Content here.
     const html = await Deno.readTextFile(join(outDir, 'test-custom.html'));
     assertStringIncludes(html, 'Custom Field Test', 'Should have title');
   } finally {
-    await cleanupDir(outDir);
-    await cleanupDir(testContentDir);
+    await cleanupDir(root);
   }
 });
 

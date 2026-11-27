@@ -19,7 +19,7 @@ Or check out the look and feel on my blog https://blog.nergy.space
     "dev": "deno run --allow-read --allow-write --allow-run --allow-net dev.ts"
   },
   "imports": {
-    "astrodon": "jsr:@nergy101/astrodon@0.2.7"
+    "astrodon": "jsr:@nergy101/astrodon@0.3.0"
   }
 }
 ```
@@ -298,16 +298,9 @@ deno task serve               # Serve locally
 # pass flags to scripts: deno task serve -- --port=5000
 ```
 
-## Configuration (minimal)
+## Branding and build options
 
-Use `optimization.config.json` if you want simple tuning:
-
-```json
-{
-  "build": { "parallel": { "enabled": true, "maxConcurrency": 4 } },
-  "server": { "cache": { "enabled": true, "ttl": 300000 } }
-}
-```
+`BuildOptions` accepts `siteTitle` (default: `'Astrodon'`), `brandName` (default: `'Astrodon'`), `logo` (optional navbar image URL), and `verbose` (`--verbose=true` for per-file build logs).
 
 ## Custom components
 

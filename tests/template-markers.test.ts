@@ -11,16 +11,13 @@ import {
   buildTestSite,
   cleanupDir,
   createTestContent,
-  getBenchmarkDir,
   getTemplatePath,
 } from './utils/test-helpers.ts';
 
 Deno.test('Template Markers - {{title}} replacement', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const outDir = join(benchmarkDir, 'dist-test-title');
+  const outDir = await Deno.makeTempDir({ prefix: 'astrodon-title-' });
 
   try {
-    await cleanupDir(outDir);
     await buildBenchmarkBlog(outDir);
 
     const html = await Deno.readTextFile(
@@ -44,11 +41,9 @@ Deno.test('Template Markers - {{title}} replacement', async () => {
 });
 
 Deno.test('Template Markers - {{content}} replacement', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const outDir = join(benchmarkDir, 'dist-test-content');
+  const outDir = await Deno.makeTempDir({ prefix: 'astrodon-content-' });
 
   try {
-    await cleanupDir(outDir);
     await buildBenchmarkBlog(outDir);
 
     const html = await Deno.readTextFile(
@@ -71,11 +66,9 @@ Deno.test('Template Markers - {{content}} replacement', async () => {
 });
 
 Deno.test('Template Markers - {{navigation}} replacement', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const outDir = join(benchmarkDir, 'dist-test-nav');
+  const outDir = await Deno.makeTempDir({ prefix: 'astrodon-nav-' });
 
   try {
-    await cleanupDir(outDir);
     await buildBenchmarkBlog(outDir);
 
     const html = await Deno.readTextFile(
@@ -95,11 +88,9 @@ Deno.test('Template Markers - {{navigation}} replacement', async () => {
 });
 
 Deno.test('Template Markers - {{component:navbar}} replacement', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const outDir = join(benchmarkDir, 'dist-test-component');
+  const outDir = await Deno.makeTempDir({ prefix: 'astrodon-component-' });
 
   try {
-    await cleanupDir(outDir);
     await buildBenchmarkBlog(outDir);
 
     const html = await Deno.readTextFile(
@@ -119,9 +110,9 @@ Deno.test('Template Markers - {{component:navbar}} replacement', async () => {
 });
 
 Deno.test('Template Markers - {{htmlcode}} custom HTML blocks', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const testContentDir = join(benchmarkDir, 'routes-test-htmlcode');
-  const outDir = join(benchmarkDir, 'dist-test-htmlcode');
+  const root = await Deno.makeTempDir({ prefix: 'astrodon-htmlcode-' });
+  const testContentDir = join(root, 'routes');
+  const outDir = join(root, 'dist');
 
   try {
     await createTestContent(
@@ -143,7 +134,6 @@ More content here.
 `
     );
 
-    await cleanupDir(outDir);
     await buildTestSite({
       contentDir: testContentDir,
       outDir,
@@ -165,8 +155,7 @@ More content here.
     assertStringIncludes(html, '&lt;div', 'HTML should be escaped');
     assertStringIncludes(html, 'language-html', 'Should have HTML language class');
   } finally {
-    await cleanupDir(outDir);
-    await cleanupDir(testContentDir);
+    await cleanupDir(root);
   }
 });
 

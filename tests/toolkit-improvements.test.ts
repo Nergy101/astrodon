@@ -140,8 +140,11 @@ About content.`,
     });
 
     const html = await Deno.readTextFile(join(outDir, "index.html"));
-    assertStringIncludes(html, 'href="/preview/about"');
-    assertStringIncludes(html, 'href="https://outside.example/path"');
+    assertStringIncludes(html, 'href="/preview/about">Local</a>');
+    assertStringIncludes(
+      html,
+      'href="https://outside.example/path" target="_blank" rel="noopener noreferrer"',
+    );
     assertStringIncludes(html, 'src="/preview/assets/cover.png"');
     assertStringIncludes(html, 'src="https://images.example/remote.png"');
     assertStringIncludes(html, 'src="//cdn.example/remote.png"');
@@ -305,8 +308,9 @@ Deno.test("frontmatter compatibility - metadata-free pages use filename defaults
     await build({ contentDir, outDir });
 
     const html = await Deno.readTextFile(join(outDir, "plain-page.html"));
-    assertStringIncludes(html, "<title>Plain Page | Nergy</title>");
-    assert(!html.includes("undefined | Nergy"));
+    assertStringIncludes(html, "<title>Plain Page | Astrodon</title>");
+    assert(!html.includes("undefined | Astrodon"));
+    assert(!html.includes("Nergy"));
     assertEquals(html.includes('rel="canonical"'), false);
     try {
       await Deno.stat(join(outDir, "sitemap.xml"));
@@ -314,6 +318,116 @@ Deno.test("frontmatter compatibility - metadata-free pages use filename defaults
     } catch (error) {
       if (!(error instanceof Deno.errors.NotFound)) throw error;
     }
+  } finally {
+    await cleanupDir(root);
+  }
+});
+
+Deno.test("nested HTML blocks, custom branding, nested nav, XSS escaping, template errors, and persistent cache", async () => {
+  const root = await Deno.makeTempDir({ prefix: "astrodon-review-fixes-" });
+  const contentDir = join(root, "routes");
+  const outDir = join(root, "dist");
+
+  try {
+    await createTestContent(
+      contentDir,
+      "index.md",
+      `---
+title: Home
+---
+
+<div class="outer"><div class="inner">Nested</div></div>
+
+[Internal](/docs/guides/intro)`,
+    );
+    await createTestContent(
+      join(contentDir, "docs", "guides"),
+      "intro.md",
+      `---
+title: <script>alert(1)</script>
+author: <b>Bob</b>
+tags: [one<two]
+---
+
+Guide body.`,
+    );
+    await createTestContent(
+      join(contentDir, "docs"),
+      "index.md",
+      `---
+title: Docs
+---
+
+{{routes:toc}}`,
+    );
+
+    await build({
+      contentDir,
+      outDir,
+      siteTitle: "MyDocs",
+      brandName: "MyBrand",
+    });
+
+    const indexHtml = await Deno.readTextFile(join(outDir, "index.html"));
+    assertStringIncludes(
+      indexHtml,
+      '<div class="outer"><div class="inner">Nested</div></div>',
+    );
+    assert(!indexHtml.includes("<p><div"));
+    assertStringIncludes(indexHtml, "MyBrand");
+    assertStringIncludes(indexHtml, "<title>Home | MyDocs</title>");
+    assertStringIncludes(indexHtml, "/docs/guides/intro");
+    assert(!indexHtml.includes("<script>alert(1)</script>"));
+    assertStringIncludes(indexHtml, "&lt;script&gt;alert(1)&lt;/script&gt;");
+
+    const introHtml = await Deno.readTextFile(
+      join(outDir, "docs", "guides", "intro.html"),
+    );
+    assertStringIncludes(introHtml, "&lt;b&gt;Bob&lt;/b&gt;");
+    assertStringIncludes(introHtml, "one&lt;two");
+
+    // Second build should hit the persistent disk cache for non-TOC pages.
+    const secondRun = await new Deno.Command(Deno.execPath(), {
+      args: [
+        "run",
+        "--allow-read",
+        "--allow-write",
+        "--allow-run",
+        join(new URL("../build.ts", import.meta.url).pathname),
+        `--contentDir=${contentDir}`,
+        `--outDir=${outDir}`,
+        "--siteTitle=MyDocs",
+        "--brandName=MyBrand",
+      ],
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    const secondStdout = new TextDecoder().decode(secondRun.stdout);
+    assertEquals(secondRun.code, 0);
+    assertStringIncludes(secondStdout, "2 cached");
+
+    // Broken template should fail the build rather than silently succeeding.
+    const badTemplate = join(root, "bad-template.ts");
+    await Deno.writeTextFile(
+      badTemplate,
+      "export function render() { throw new Error('boom'); }",
+    );
+    const badResult = await new Deno.Command(Deno.execPath(), {
+      args: [
+        "run",
+        "--allow-read",
+        "--allow-write",
+        "--allow-run",
+        join(new URL("../build.ts", import.meta.url).pathname),
+        `--contentDir=${contentDir}`,
+        `--outDir=${outDir}`,
+        `--template=${badTemplate}`,
+      ],
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    assertEquals(badResult.code, 1);
+    assertStringIncludes(new TextDecoder().decode(badResult.stderr), "boom");
   } finally {
     await cleanupDir(root);
   }

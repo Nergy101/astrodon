@@ -12,16 +12,13 @@ import {
   extractTextByClass,
   extractLinks,
   extractExcerpts,
-  getBenchmarkDir,
 } from './utils/test-helpers.ts';
 import { EXPECTED_BENCHMARK_POSTS } from './fixtures/benchmark-data.ts';
 
 Deno.test('{{routes:toc}} - Marker replacement', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const outDir = join(benchmarkDir, 'dist-test-toc');
+  const outDir = await Deno.makeTempDir({ prefix: 'astrodon-toc-' });
 
   try {
-    await cleanupDir(outDir);
     await buildBenchmarkBlog(outDir);
 
     const html = await Deno.readTextFile(
@@ -45,11 +42,9 @@ Deno.test('{{routes:toc}} - Marker replacement', async () => {
 });
 
 Deno.test('{{routes:toc}} - Post titles', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const outDir = join(benchmarkDir, 'dist-test-toc-titles');
+  const outDir = await Deno.makeTempDir({ prefix: 'astrodon-toc-titles-' });
 
   try {
-    await cleanupDir(outDir);
     await buildBenchmarkBlog(outDir);
 
     const html = await Deno.readTextFile(
@@ -86,11 +81,9 @@ Deno.test('{{routes:toc}} - Post titles', async () => {
 });
 
 Deno.test('{{routes:toc}} - Post metadata (dates, authors)', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const outDir = join(benchmarkDir, 'dist-test-toc-metadata');
+  const outDir = await Deno.makeTempDir({ prefix: 'astrodon-toc-meta-' });
 
   try {
-    await cleanupDir(outDir);
     await buildBenchmarkBlog(outDir);
 
     const html = await Deno.readTextFile(
@@ -122,11 +115,9 @@ Deno.test('{{routes:toc}} - Post metadata (dates, authors)', async () => {
 });
 
 Deno.test('{{routes:toc}} - Post excerpts', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const outDir = join(benchmarkDir, 'dist-test-toc-excerpts');
+  const outDir = await Deno.makeTempDir({ prefix: 'astrodon-toc-excerpts-' });
 
   try {
-    await cleanupDir(outDir);
     await buildBenchmarkBlog(outDir);
 
     const html = await Deno.readTextFile(
@@ -174,11 +165,9 @@ Deno.test('{{routes:toc}} - Post excerpts', async () => {
 });
 
 Deno.test('{{routes:toc}} - Post tags', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const outDir = join(benchmarkDir, 'dist-test-toc-tags');
+  const outDir = await Deno.makeTempDir({ prefix: 'astrodon-toc-tags-' });
 
   try {
-    await cleanupDir(outDir);
     await buildBenchmarkBlog(outDir);
 
     const html = await Deno.readTextFile(
@@ -201,11 +190,9 @@ Deno.test('{{routes:toc}} - Post tags', async () => {
 });
 
 Deno.test('{{routes:toc}} - Post URLs', async () => {
-  const benchmarkDir = getBenchmarkDir();
-  const outDir = join(benchmarkDir, 'dist-test-toc-urls');
+  const outDir = await Deno.makeTempDir({ prefix: 'astrodon-toc-urls-' });
 
   try {
-    await cleanupDir(outDir);
     await buildBenchmarkBlog(outDir);
 
     const html = await Deno.readTextFile(

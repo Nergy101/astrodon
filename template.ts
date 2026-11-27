@@ -4,27 +4,32 @@ export interface RenderContext {
   path: string;
 }
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 export function render(content: string, context: RenderContext): string {
   const meta = context.meta;
-
-  // Replace literal \n with actual newlines
-  content = content.replace(/\\n/g, '\n');
 
   // Create metadata component
   let metadata = '<div class="metadata">';
   
   if (meta.author) {
-    metadata += `<span class="author">By ${meta.author}</span>`;
+    metadata += `<span class="author">By ${escapeHtml(meta.author)}</span>`;
   }
   
   if (meta.date) {
-    metadata += `<span class="date">${meta.date}</span>`;
+    metadata += `<span class="date">${escapeHtml(meta.date)}</span>`;
   }
   
   if (meta.tags && Array.isArray(meta.tags)) {
     metadata += '<div class="tags">';
     for (const tag of meta.tags) {
-      metadata += `<span class="tag">${tag}</span>`;
+      metadata += `<span class="tag">${escapeHtml(tag)}</span>`;
     }
     metadata += '</div>';
   }
@@ -45,7 +50,9 @@ export function render(content: string, context: RenderContext): string {
   let processedContent = content.replace(
     /<blockquote>(.*?)<\/blockquote>/gs,
     (_match, quoteText) => {
-      // Clean up literal \n characters and extra whitespace
+      quoteText = quoteText.trim();
+      quoteText = quoteText.replace(/^<p>([\s\S]*)<\/p>$/i, '$1');
+      quoteText = quoteText.replace(/&quot;/g, '"');
       quoteText = quoteText.replace(/\\n/g, '\n');
       quoteText = quoteText.replace(/^\n*/g, '');  // Remove leading newlines
       quoteText = quoteText.replace(/\n*$/g, '');  // Remove trailing newlines

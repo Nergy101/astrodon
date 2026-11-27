@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run --allow-net
 
-import { dirname, resolve } from "@std/path";
+import { basename, dirname, join, resolve } from "@std/path";
 
 function getArg(name: string, defaultValue = ""): string {
   const arg = Deno.args.find((value) => value.startsWith(`--${name}=`));
@@ -14,6 +14,10 @@ const templatePath = getArg("template", "./template.ts");
 const componentsDir = getArg("componentsDir", "./components");
 const basePath = getArg("basePath", "/");
 const siteUrl = getArg("siteUrl");
+const siteTitle = getArg("siteTitle");
+const brandName = getArg("brandName");
+const logo = getArg("logo");
+const verbose = getArg("verbose") === "true";
 const port = Number(getArg("port", "8000"));
 const allowBuildNet = getArg("allowBuildNet") === "true" ||
   ["http:", "https:"].includes(new URL("./", import.meta.url).protocol);
@@ -38,6 +42,10 @@ function buildArgs(): string[] {
     `--basePath=${basePath}`,
   );
   if (siteUrl) args.push(`--siteUrl=${siteUrl}`);
+  if (siteTitle) args.push(`--siteTitle=${siteTitle}`);
+  if (brandName) args.push(`--brandName=${brandName}`);
+  if (logo) args.push(`--logo=${logo}`);
+  if (verbose) args.push("--verbose=true");
   return args;
 }
 
@@ -50,11 +58,28 @@ async function buildOnce(): Promise<boolean> {
   return code === 0;
 }
 
+function canonicalPath(path: string): string {
+  const resolved = resolve(path);
+  const missing: string[] = [];
+  let current = resolved;
+  while (true) {
+    try {
+      const real = Deno.realPathSync(current);
+      return missing.length === 0 ? real : join(real, ...missing.reverse());
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) return resolved;
+      missing.push(basename(current));
+      current = parent;
+    }
+  }
+}
+
 function watcherRoots(): string[] {
   return [
     ...new Set(
       [contentDir, assetsDir, componentsDir, templatePath].map((path) => {
-        const absolutePath = resolve(path);
+        const absolutePath = canonicalPath(path);
         try {
           return Deno.statSync(absolutePath).isDirectory
             ? absolutePath
@@ -80,18 +105,18 @@ function isSameOrChild(root: string, candidate: string): boolean {
 }
 
 function isOutputPath(path: string): boolean {
-  return isSameOrChild(resolve(outDir), resolve(path));
+  return isSameOrChild(canonicalPath(outDir), canonicalPath(path));
 }
 
 function isRelevantInput(path: string): boolean {
-  const changedPath = resolve(path);
+  const changedPath = canonicalPath(path);
   if (
     [contentDir, assetsDir, componentsDir].some((directory) =>
-      isSameOrChild(resolve(directory), changedPath)
+      isSameOrChild(canonicalPath(directory), changedPath)
     )
   ) return true;
 
-  const templateAbsolutePath = resolve(templatePath);
+  const templateAbsolutePath = canonicalPath(templatePath);
   try {
     if (Deno.statSync(templateAbsolutePath).isDirectory) {
       return isSameOrChild(templateAbsolutePath, changedPath);
