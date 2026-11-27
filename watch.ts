@@ -129,16 +129,40 @@ function isRelevantInput(path: string): boolean {
 
 async function main(): Promise<void> {
   const watcher = Deno.watchFs(watcherRoots());
+  let serveProcess: Deno.ChildProcess | undefined;
+  let serveExitCode: number | undefined;
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let stopping = false;
+  const shutdownServe = async () => {
+    if (debounceTimer !== undefined) {
+      clearTimeout(debounceTimer);
+      debounceTimer = undefined;
+    }
+    if (serveProcess) {
+      try {
+        serveProcess.kill("SIGTERM");
+      } catch {
+        // It may have exited already.
+      }
+      await serveProcess.status.catch(() => {});
+      serveProcess = undefined;
+    }
+  };
   const closeWatcher = () => {
+    if (stopping) return;
     stopping = true;
-    watcher.close();
+    try {
+      watcher.close();
+    } catch {
+      // Ignore if already closed.
+    }
+    void shutdownServe().finally(() => {
+      Deno.exit(0);
+    });
   };
   Deno.addSignalListener("SIGINT", closeWatcher);
   Deno.addSignalListener("SIGTERM", closeWatcher);
 
-  let serveProcess: Deno.ChildProcess | undefined;
-  let serveExitCode: number | undefined;
   try {
     const initialBuildSucceeded = await buildOnce();
     if (!initialBuildSucceeded) {
@@ -173,7 +197,6 @@ async function main(): Promise<void> {
     console.log(
       `👀 Watching ${contentDir}, ${assetsDir}, ${componentsDir}, and ${templatePath}`,
     );
-    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     let buildRunning = false;
     let rebuildAgain = false;
 
@@ -224,17 +247,14 @@ async function main(): Promise<void> {
     }
   } finally {
     stopping = true;
-    watcher.close();
+    try {
+      watcher.close();
+    } catch {
+      // Ignore if already closed.
+    }
     Deno.removeSignalListener("SIGINT", closeWatcher);
     Deno.removeSignalListener("SIGTERM", closeWatcher);
-    if (serveProcess) {
-      try {
-        serveProcess.kill("SIGTERM");
-      } catch {
-        // It may have exited already.
-      }
-      await serveProcess.status;
-    }
+    await shutdownServe();
   }
 }
 
