@@ -213,6 +213,7 @@ Deno.test("watch rebuilds content and notifies live-reload clients", async () =>
     for (let attempt = 0; attempt < 100; attempt++) {
       try {
         const response = await fetch(`${origin}/docs/`);
+        await response.body?.cancel();
         if (response.ok) {
           ready = true;
           break;
@@ -237,15 +238,18 @@ Deno.test("watch rebuilds content and notifies live-reload clients", async () =>
     })();
 
     await Deno.writeTextFile(pagePath, "# After change");
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const sawReload = await Promise.race([
       reloadNotice,
-      new Promise<never>((_, reject) =>
-        setTimeout(
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
           () => reject(new Error("timed out waiting for live reload")),
           10_000,
-        )
-      ),
-    ]);
+        );
+      }),
+    ]).finally(() => {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    });
     assert(sawReload, "successful rebuild should notify connected browsers");
 
     const response = await fetch(`${origin}/docs/`);
