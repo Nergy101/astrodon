@@ -75,10 +75,16 @@ function canonicalPath(path: string): string {
   }
 }
 
+const isRemoteTemplate = templatePath.startsWith("http://") ||
+  templatePath.startsWith("https://") ||
+  templatePath.startsWith("file://");
+
 function watcherRoots(): string[] {
+  const paths = [contentDir, assetsDir, componentsDir];
+  if (!isRemoteTemplate) paths.push(templatePath);
   return [
     ...new Set(
-      [contentDir, assetsDir, componentsDir, templatePath].map((path) => {
+      paths.map((path) => {
         const absolutePath = canonicalPath(path);
         try {
           return Deno.statSync(absolutePath).isDirectory
@@ -116,6 +122,7 @@ function isRelevantInput(path: string): boolean {
     )
   ) return true;
 
+  if (isRemoteTemplate) return false;
   const templateAbsolutePath = canonicalPath(templatePath);
   try {
     if (Deno.statSync(templateAbsolutePath).isDirectory) {

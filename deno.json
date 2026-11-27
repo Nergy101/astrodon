@@ -1,6 +1,6 @@
 {
   "name": "@nergy101/astrodon",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "license": "MIT",
   "description": "A tiny Deno static site toolkit. Build markdown with TypeScript-powered templates, and serve the output with a minimal dev server.",
   "exports": "./mod.ts",

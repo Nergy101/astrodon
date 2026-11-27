@@ -19,7 +19,7 @@ Or check out the look and feel on my blog https://blog.nergy.space
     "dev": "deno run --allow-read --allow-write --allow-run --allow-net dev.ts"
   },
   "imports": {
-    "astrodon": "jsr:@nergy101/astrodon@0.3.0"
+    "astrodon": "jsr:@nergy101/astrodon@0.3.1"
   }
 }
 ```

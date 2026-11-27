@@ -68,13 +68,18 @@ export interface WatchOptions extends BuildOptions {
   signal?: AbortSignal;
 }
 
+function resolveDefaultAsset(pkgBase: URL, relativePath: string): string {
+  const url = new URL(relativePath, pkgBase);
+  return url.protocol === 'file:' ? url.pathname : url.href;
+}
+
 function getBuildScriptArgs(options: BuildOptions, pkgBase: URL): string[] {
   const resolvedAssetsDir = options.assetsDir ??
-    new URL('assets', pkgBase).pathname;
+    resolveDefaultAsset(pkgBase, 'assets');
   const resolvedTemplate = options.template ??
-    new URL('template.ts', pkgBase).pathname;
+    resolveDefaultAsset(pkgBase, 'template.ts');
   const resolvedComponentsDir = options.componentsDir ??
-    new URL('components', pkgBase).pathname;
+    resolveDefaultAsset(pkgBase, 'components');
   const args = [
     `--contentDir=${options.contentDir}`,
     `--outDir=${options.outDir}`,
@@ -168,11 +173,11 @@ export async function build(options: BuildOptions): Promise<void> {
   const buildScript = getScriptUrl('build.ts');
   const pkgBase = new URL('./', import.meta.url);
   const resolvedAssetsDir = options.assetsDir ??
-    new URL('assets', pkgBase).pathname;
+    resolveDefaultAsset(pkgBase, 'assets');
   const resolvedTemplate = options.template ??
-    new URL('template.ts', pkgBase).pathname;
+    resolveDefaultAsset(pkgBase, 'template.ts');
   const resolvedComponentsDir = options.componentsDir ??
-    new URL('components', pkgBase).pathname;
+    resolveDefaultAsset(pkgBase, 'components');
 
   const args: string[] = [
     'run',
