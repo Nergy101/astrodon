@@ -57,7 +57,7 @@ jobs:
       - name: Setup Deno
         uses: denoland/setup-deno@v2
         with:
-          deno-version: ${{ steps.deno_version.outputs.DENO_VERSION }}
+          deno-version: 2.x
 
       - name: Parse tag and determine release type
         id: parse_tag
@@ -262,7 +262,7 @@ jobs:
         if: github.event_name == 'push' || github.event.inputs.publish_to_jsr == 'true'
         run: |
           echo "📦 Publishing to JSR..."
-          npx jsr publish --allow-dirty
+          deno publish --allow-dirty
           echo "✅ Successfully published to JSR"
 
       - name: Create Release
